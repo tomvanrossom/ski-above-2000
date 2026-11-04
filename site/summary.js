@@ -1,5 +1,5 @@
 const GROUPS = [{ key: "all" }, ...COLOURS];
-const MAX_COMPARE = 4;
+const MAX_COMPARE = CompareTargets.MAX;
 
 let areas = [];
 let state = UrlState.parse(location.search);
@@ -131,8 +131,12 @@ function renderRows(list) {
 }
 
 function compareTargets() {
-  if (selected.size > 0) return [...selected];
-  return Favourites.list().filter((s) => areas.some((a) => a.slug === s)).slice(0, MAX_COMPARE);
+  return CompareTargets.targets({
+    selected: [...selected],
+    visible: visible().map((a) => a.slug),
+    favourites: Favourites.list(),
+    known: areas.map((a) => a.slug),
+  });
 }
 
 function renderCompareButton() {
@@ -157,6 +161,7 @@ function renderControls() {
 
 function render() {
   const list = visible();
+  selected = new Set(CompareTargets.visibleSelection([...selected], list.map((a) => a.slug)));
   renderControls();
   renderHead();
   renderRows(list);
@@ -202,6 +207,8 @@ function isValidArea(a) {
 }
 
 initPage(() => { renderCountryOptions(); render(); });
+addEventListener("pageshow", (e) => { if (e.persisted) render(); });
+addEventListener("storage", render);
 fetchJSON("data/areas.json")
   .then((data) => {
     if (!Array.isArray(data)) throw new Error("areas.json is not a list");

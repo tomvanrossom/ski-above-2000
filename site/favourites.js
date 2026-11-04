@@ -1,13 +1,13 @@
 const Favourites = (() => {
   const KEY = "ski-above-2000:favourites";
 
-  function load() {
+  function load(fallback = new Set()) {
     try {
       const stored = JSON.parse(localStorage.getItem(KEY) ?? "[]");
       return new Set(Array.isArray(stored) ? stored.filter((s) => typeof s === "string" && SLUG_RE.test(s)) : []);
     } catch (e) {
       console.warn("Favourites unavailable:", e);
-      return new Set();
+      return fallback;
     }
   }
 
@@ -20,6 +20,8 @@ const Favourites = (() => {
   }
 
   let current = load();
+  addEventListener("pageshow", (e) => { if (e.persisted) current = load(current); });
+  addEventListener("storage", (e) => { if (e.key === KEY) current = load(current); });
 
   function toggle(slug) {
     const next = new Set(current);
