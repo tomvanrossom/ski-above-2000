@@ -29,7 +29,7 @@ jobs:
       - name: Run tests
         run: |
           python build/test_build.py
-          node --test test/url-state.test.js test/compare-targets.test.js
+          node --test test/url-state.test.js test/compare-targets.test.js test/best-value.test.js
 
       - name: Download OpenSkiData CSVs
         run: |

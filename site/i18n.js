@@ -89,6 +89,7 @@ const I18N = (() => {
       rowColourHigh: "{colour}: above 2,000 m",
       detailPage: "Detail page",
       compareMissing: "Not found: {slugs}",
+      best: "best",
     },
     nl: {
       siteTitle: "Skigebieden boven 2.000 m",
@@ -178,6 +179,7 @@ const I18N = (() => {
       rowColourHigh: "{colour}: boven 2.000 m",
       detailPage: "Detailpagina",
       compareMissing: "Niet gevonden: {slugs}",
+      best: "beste",
     },
   };
   const COUNTRIES_NL = {

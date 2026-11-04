@@ -23,7 +23,7 @@ curl --compressed -fsSL -o .cache/ski_areas.csv https://tiles.openskimap.org/csv
 python build/build.py --runs .cache/runs.csv --areas .cache/ski_areas.csv
 python build/check_output.py
 python build/test_build.py
-node --test test/url-state.test.js test/compare-targets.test.js
+node --test test/url-state.test.js test/compare-targets.test.js test/best-value.test.js
 python -m http.server 8000 --directory site
 ```
 

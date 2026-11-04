@@ -11,22 +11,35 @@ function requestedSlugs() {
 const fig = (a, group, index) => a.figures[group]?.[index] ?? 0;
 const pieces = (a) => [...a.pistes, ...a.unnamed];
 
+const KM = { format: (n) => I18N.km(n), digits: 1 };
+const PCT = { format: (n) => I18N.pct(n), digits: 2 };
+const COUNT = { format: (n) => I18N.num(n), digits: 0 };
+const METRES = { format: (n) => I18N.m(n), digits: 0 };
+const highShare = (a) => (fig(a, "all", 0) ? fig(a, "all", 1) / fig(a, "all", 0) : 0);
+
 function rows() {
-  const kmRow = (label, group, index, swatchOf) => ({ label, swatchOf, value: (a) => I18N.km(fig(a, group, index)) });
+  const kmRow = (label, group, index, swatchOf) => ({ label, swatchOf, ...KM, best: true, raw: (a) => fig(a, group, index) });
   return [
     kmRow(I18N.t("rowTotal"), "all", 0),
     kmRow(I18N.t("rowHigh"), "all", 1),
-    { label: I18N.t("rowPctHigh"), value: (a) => I18N.pct(fig(a, "all", 0) ? fig(a, "all", 1) / fig(a, "all", 0) : 0) },
+    { label: I18N.t("rowPctHigh"), ...PCT, best: true, raw: highShare },
     ...COLOURS.flatMap((c) => [
       kmRow(I18N.t("rowColourTotal", { colour: I18N.t(c.key) }), c.key, 0, c),
       kmRow(I18N.t("rowColourHigh", { colour: I18N.t(c.key) }), c.key, 1, c),
     ]),
-    { label: I18N.t("rowNamed"), value: (a) => I18N.num(a.pistes.length) },
-    { label: I18N.t("rowUnnamed"), value: (a) => I18N.num(a.unnamed.length) },
-    { label: I18N.t("rowTop"), value: (a) => I18N.m(Math.max(...pieces(a).map((p) => p.start_m))) },
-    { label: I18N.t("rowBottom"), value: (a) => I18N.m(Math.min(...pieces(a).map((p) => p.end_m))) },
-    { label: I18N.t("rowQuality"), value: (a) => I18N.pct(a.unnamed_share) },
+    { label: I18N.t("rowNamed"), ...COUNT, best: true, raw: (a) => a.pistes.length },
+    { label: I18N.t("rowUnnamed"), ...COUNT, raw: (a) => a.unnamed.length },
+    { label: I18N.t("rowTop"), ...METRES, best: true, raw: (a) => Math.max(...pieces(a).map((p) => p.start_m)) },
+    { label: I18N.t("rowBottom"), ...METRES, raw: (a) => Math.min(...pieces(a).map((p) => p.end_m)) },
+    { label: I18N.t("rowQuality"), ...PCT, raw: (a) => a.unnamed_share },
   ];
+}
+
+function valueCell(text, isBest) {
+  if (!isBest) return el("td", {}, text);
+  const td = el("td", { class: "best" }, text);
+  td.append(el("span", { class: "visually-hidden" }, ` (${I18N.t("best")})`));
+  return td;
 }
 
 function headerRow() {
@@ -50,7 +63,9 @@ function bodyRow(row) {
   } else {
     th.append(row.label);
   }
-  tr.append(th, ...loaded.map((a) => el("td", {}, row.value(a))));
+  const values = loaded.map(row.raw);
+  const best = new Set(row.best ? BestValue.bestIndexes(values, row.digits) : []);
+  tr.append(th, ...values.map((v, i) => valueCell(row.format(v), best.has(i))));
   return tr;
 }
 
