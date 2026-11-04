@@ -9,8 +9,14 @@
 <link rel="stylesheet" href="shared.css">
 <style>
   #areas th, #areas td { text-align: right; }
-  #areas th:first-child, #areas td:first-child { text-align: left; position: sticky; left: 0; background: var(--surface); z-index: 1; }
-  #areas td:first-child { white-space: normal; min-width: 180px; max-width: 260px; overflow-wrap: anywhere; }
+  #areas .c-fav, #areas .c-cmp, #areas .c-name { position: sticky; background: var(--surface); z-index: 1; }
+  #areas .c-fav, #areas .c-cmp { text-align: center; width: 40px; min-width: 40px; max-width: 40px; padding-inline: 4px; }
+  #areas .c-fav { left: 0; }
+  #areas .c-cmp { left: 40px; }
+  #areas .c-name { left: 80px; text-align: left; border-right: 1px solid var(--line); }
+  #areas td.c-name { white-space: normal; min-width: 150px; max-width: 240px; overflow-wrap: anywhere; }
+  #areas thead .c-cmp { font-size: 10px; letter-spacing: 0; }
+  #areas input[type="checkbox"] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
   #areas thead tr:first-child th { border-bottom: 0; padding-bottom: 0; }
   #areas tbody tr:hover td { background: var(--bg); }
   th.group { text-align: center !important; }
@@ -18,11 +24,9 @@
   .start { border-left: 1px solid var(--line); }
   th.left, td.country { text-align: left !important; }
   td.country { color: var(--muted); white-space: normal; }
-  .area-line { display: flex; align-items: baseline; gap: 4px; }
-  .area-line a.name { font-weight: 600; }
+  td a.name { font-weight: 600; }
   .area-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; font-size: 12px; color: var(--muted); }
   .area-meta a { color: var(--accent); }
-  .area-meta label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
   .bar { display: block; height: 6px; margin-top: 4px; border-radius: 3px; background: var(--low); overflow: hidden; margin-left: auto; }
   .bar i { display: block; height: 100%; background: var(--accent); }
   .controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: end; }

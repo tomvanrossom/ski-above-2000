@@ -44,7 +44,7 @@ function sortButton(key, label, isNumeric = true) {
 
 function renderHead() {
   const top = el("tr");
-  top.append(el("th"), el("th"));
+  top.append(el("th", { class: "c-fav" }), el("th", { class: "c-cmp" }), el("th", { class: "c-name" }), el("th"));
   GROUPS.forEach((g) => {
     const th = el("th", { class: "group start", colspan: 2, scope: "colgroup" });
     const span = el("span");
@@ -54,11 +54,14 @@ function renderHead() {
     top.append(th);
   });
   const sub = el("tr");
-  const areaTh = el("th");
+  const favTh = el("th", { class: "c-fav", scope: "col", title: I18N.t("colFav") });
+  favTh.append(el("span", { "aria-hidden": "true" }, "★"), el("span", { class: "visually-hidden" }, I18N.t("colFav")));
+  const compareTh = el("th", { class: "c-cmp", scope: "col" }, I18N.t("colCompare"));
+  const areaTh = el("th", { class: "c-name" });
   areaTh.append(sortButton("name", I18N.t("colArea"), false));
   const countryTh = el("th", { class: "left" });
   countryTh.append(sortButton("country", I18N.t("colCountry"), false));
-  sub.append(areaTh, countryTh);
+  sub.append(favTh, compareTh, areaTh, countryTh);
   GROUPS.forEach((g) => {
     const total = el("th", { class: "start" });
     total.append(sortButton(`${g.key}-total`, I18N.t("colTotal")));
@@ -80,8 +83,8 @@ function shareBar(total, high, maxTotal) {
   return bar;
 }
 
-function compareBox(area) {
-  const label = el("label");
+function compareCell(area) {
+  const td = el("td", { class: "c-cmp" });
   const box = el("input", { type: "checkbox", "aria-label": `${I18N.t("selectForCompare")}: ${area.name}` });
   box.checked = selected.has(area.slug);
   box.disabled = !box.checked && selected.size >= MAX_COMPARE;
@@ -91,19 +94,22 @@ function compareBox(area) {
     selected = next;
     render();
   });
-  label.append(box, I18N.t("selectForCompare"));
-  return label;
+  td.append(box);
+  return td;
+}
+
+function favCell(a) {
+  const td = el("td", { class: "c-fav" });
+  td.append(Favourites.button(a.slug, () => { if (state.fav) render(); else renderCompareButton(); }));
+  return td;
 }
 
 function areaCell(a) {
-  const td = el("td");
-  const line = el("div", { class: "area-line" });
-  line.append(Favourites.button(a.slug, () => { if (state.fav) render(); else renderCompareButton(); }),
-    el("a", { href: `area.html#${a.slug}`, class: "name" }, a.name));
+  const td = el("td", { class: "c-name" });
   const meta = el("div", { class: "area-meta" });
   if (a.regions.length) meta.append(el("span", {}, a.regions.join(" · ")));
-  meta.append(link(osmUrl(a.id, a.lat, a.lng, 13), I18N.t("openSkiMap")), compareBox(a));
-  td.append(line, meta);
+  meta.append(link(osmUrl(a.id, a.lat, a.lng, 13), I18N.t("openSkiMap")));
+  td.append(el("a", { href: `area.html#${a.slug}`, class: "name" }, a.name), meta);
   const hint = unnamedHint(a.unnamed_share);
   if (hint) td.append(hint);
   return td;
@@ -113,7 +119,7 @@ function renderRows(list) {
   const maxTotal = Math.max(...list.map((a) => fig(a, "all", 0)), 1);
   const rows = [...list].sort(compare).map((a) => {
     const tr = el("tr");
-    tr.append(areaCell(a), el("td", { class: "country" }, a.countries.map(I18N.country).join(" · ")));
+    tr.append(favCell(a), compareCell(a), areaCell(a), el("td", { class: "country" }, a.countries.map(I18N.country).join(" · ")));
     GROUPS.forEach((g) => {
       const total = kmCell(fig(a, g.key, 0), "start");
       if (g.key === "all") total.append(shareBar(fig(a, "all", 0), fig(a, "all", 1), maxTotal));
