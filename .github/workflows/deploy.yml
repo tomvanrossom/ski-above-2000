@@ -1,0 +1,60 @@
+name: Build and deploy
+
+on:
+  schedule:
+    - cron: "17 4 1 * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Run tests
+        run: |
+          python build/test_build.py
+          node --test test/url-state.test.js
+
+      - name: Download OpenSkiData CSVs
+        run: |
+          mkdir -p .cache
+          curl --compressed -fsSL -o .cache/runs.csv https://tiles.openskimap.org/csv/runs.csv
+          curl --compressed -fsSL -o .cache/ski_areas.csv https://tiles.openskimap.org/csv/ski_areas.csv
+
+      - name: Build site data
+        run: python build/build.py --runs .cache/runs.csv --areas .cache/ski_areas.csv --out site/data
+
+      - name: Check site data
+        run: python build/check_output.py site/data
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

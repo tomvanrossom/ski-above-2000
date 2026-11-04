@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ski area</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Source+Sans+3:wght@400;600&display=swap">
+<link rel="stylesheet" href="shared.css">
+<style>
+  .title-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .title-line .star { font-size: 30px; }
+  .stats { display: flex; flex-wrap: wrap; gap: 8px 28px; margin-top: 10px; font-variant-numeric: tabular-nums; }
+  .stats div { display: grid; }
+  .stats b { font-family: var(--display); font-size: 28px; font-weight: 700; line-height: 1.1; }
+  .stats span { font-size: 12px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+  .header-links { font-size: 14px; }
+  .header-links a { color: var(--accent); }
+  .breakdown-box { max-width: 720px; }
+  .breakdown td:first-child { display: flex; align-items: center; gap: 8px; }
+  .breakdown tfoot td { font-weight: 600; border-bottom: 0; border-top: 1px solid var(--line); }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--surface); color: var(--fg); font: inherit; font-size: 14px; cursor: pointer;
+  }
+  .chip[aria-pressed="false"] { opacity: .45; }
+  .chart-box { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+  #chart { display: block; }
+  #chart text { fill: var(--muted); font-family: var(--body); font-size: 11px; }
+  #chart .grid { stroke: var(--line); stroke-width: 1; }
+  #chart .threshold { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 3; }
+  #chart .bar { cursor: pointer; }
+  #chart .bar:hover, #chart .bar:focus-visible { stroke: var(--fg); stroke-width: 2; outline: none; }
+  tr.low td { color: var(--muted); }
+  tr.low .dot { background: var(--low) !important; box-shadow: inset 0 0 0 2px var(--c); }
+  tr.group td { font-style: italic; }
+  tr.flash td { background: var(--line); }
+  tbody tr:hover { background: var(--bg); }
+  .diff { display: inline-flex; align-items: center; gap: 6px; }
+  #tip {
+    position: fixed; pointer-events: none; background: var(--fg); color: var(--bg); padding: 6px 10px; border-radius: 4px;
+    font-size: 13px; font-variant-numeric: tabular-nums; z-index: 5; max-width: 260px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap narrow">
+  <div class="topbar">
+    <a id="back" href="index.html" data-i18n="backToSummary"></a>
+    <div class="lang" data-lang-switch></div>
+  </div>
+  <main id="main" class="wrap" style="padding: 0; gap: 28px"></main>
+  <footer></footer>
+</div>
+<div id="tip" hidden></div>
+<script src="i18n.js"></script>
+<script src="common.js"></script>
+<script src="favourites.js"></script>
+<script src="area-chart.js"></script>
+<script src="area.js"></script>
+</body>
+</html>

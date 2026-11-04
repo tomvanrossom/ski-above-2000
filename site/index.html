@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ski areas above 2,000 m</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Source+Sans+3:wght@400;600&display=swap">
+<link rel="stylesheet" href="shared.css">
+<style>
+  #areas th, #areas td { text-align: right; }
+  #areas th:first-child, #areas td:first-child { text-align: left; position: sticky; left: 0; background: var(--surface); z-index: 1; }
+  #areas td:first-child { white-space: normal; min-width: 180px; max-width: 260px; overflow-wrap: anywhere; }
+  #areas thead tr:first-child th { border-bottom: 0; padding-bottom: 0; }
+  #areas tbody tr:hover td { background: var(--bg); }
+  th.group { text-align: center !important; }
+  th.group span { display: inline-flex; align-items: center; gap: 6px; }
+  .start { border-left: 1px solid var(--line); }
+  th.left, td.country { text-align: left !important; }
+  td.country { color: var(--muted); white-space: normal; }
+  .area-line { display: flex; align-items: baseline; gap: 4px; }
+  .area-line a.name { font-weight: 600; }
+  .area-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; font-size: 12px; color: var(--muted); }
+  .area-meta a { color: var(--accent); }
+  .area-meta label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+  .bar { display: block; height: 6px; margin-top: 4px; border-radius: 3px; background: var(--low); overflow: hidden; margin-left: auto; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: end; }
+  .field { display: grid; gap: 4px; font-size: 12px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+  .field input[type="search"] {
+    font: inherit; font-size: 15px; text-transform: none; letter-spacing: 0; color: var(--fg); background: var(--surface);
+    border: 1px solid var(--line); border-radius: 4px; padding: 6px 10px; min-width: 0; max-width: 100%;
+  }
+  .field input[type="range"] { width: min(260px, 80vw); accent-color: var(--accent); }
+  .check { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; cursor: pointer; padding-bottom: 6px; }
+  .multi { position: relative; }
+  .multi summary {
+    list-style: none; cursor: pointer; min-width: 200px; max-width: 100%; padding: 6px 30px 6px 10px; border: 1px solid var(--line);
+    border-radius: 4px; background: var(--surface); color: var(--fg); position: relative; font-size: 15px; text-transform: none; letter-spacing: 0;
+  }
+  .multi summary::-webkit-details-marker { display: none; }
+  .multi summary::after { content: "▾"; position: absolute; right: 10px; color: var(--muted); }
+  .multi-panel {
+    position: absolute; z-index: 5; top: calc(100% + 4px); left: 0; width: min(300px, calc(100vw - 32px));
+    background: var(--surface); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 20px rgb(0 0 0 / .15);
+    padding: 8px; display: grid; gap: 6px; text-transform: none; letter-spacing: 0;
+  }
+  .multi-panel > button { justify-self: start; font: inherit; font-size: 13px; color: var(--accent); background: none; border: 0; padding: 2px 4px; cursor: pointer; }
+  .multi-list { max-height: 320px; overflow-y: auto; display: grid; }
+  .multi-list label { display: flex; align-items: center; gap: 8px; padding: 4px; border-radius: 4px; cursor: pointer; font-size: 14px; color: var(--fg); }
+  .multi-list label:hover { background: var(--bg); }
+  .multi-list small { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .compare-btn { font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 4px; border: 1px solid var(--accent); background: var(--accent); color: var(--bg); cursor: pointer; }
+  .compare-btn:disabled { opacity: .45; cursor: not-allowed; }
+  .count { font-size: 13px; color: var(--muted); padding-bottom: 8px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend b { width: 18px; height: 6px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <span class="eyebrow" data-i18n="eyebrow"></span>
+    <div class="lang" data-lang-switch></div>
+  </div>
+  <header><h1 data-i18n="siteTitle"></h1></header>
+  <div class="controls">
+    <label class="field"><span data-i18n="searchLabel"></span><input id="search" type="search" autocomplete="off" data-i18n-placeholder="searchPlaceholder"></label>
+    <div class="field">
+      <span id="country-label" data-i18n="countries"></span>
+      <details class="multi" id="country-picker">
+        <summary id="country-summary" aria-labelledby="country-label country-summary"></summary>
+        <div class="multi-panel">
+          <button type="button" id="country-clear" data-i18n="clearSelection"></button>
+          <div class="multi-list" id="country-list" role="group" aria-labelledby="country-label"></div>
+        </div>
+      </details>
+    </div>
+    <label class="field"><span id="min-label"></span><input id="min" type="range" min="0" value="0"></label>
+    <label class="check"><input id="fav" type="checkbox"><span data-i18n="favOnly"></span></label>
+    <button type="button" class="compare-btn" id="compare" aria-describedby="compare-help"></button>
+    <span class="count" id="count" aria-live="polite"></span>
+  </div>
+  <p class="note" id="compare-help" data-i18n="compareLimit"></p>
+  <p class="note" data-i18n="intro"></p>
+  <div class="legend">
+    <span><b style="background: var(--accent)"></b><span data-i18n="legendHigh"></span></span>
+    <span><b style="background: var(--low)"></b><span data-i18n="legendLow"></span></span>
+  </div>
+  <div class="table-box" id="table-box">
+    <table id="areas">
+      <thead id="head"></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <p class="note" data-i18n="method"></p>
+  <footer></footer>
+</div>
+<script src="i18n.js"></script>
+<script src="common.js"></script>
+<script src="favourites.js"></script>
+<script src="url-state.js"></script>
+<script src="summary.js"></script>
+</body>
+</html>
