@@ -15,9 +15,8 @@
   #areas .c-cmp { left: 40px; }
   #areas .c-name { left: 80px; text-align: left; border-right: 1px solid var(--line); }
   #areas td.c-name { white-space: normal; min-width: 150px; max-width: 240px; overflow-wrap: anywhere; }
-  #areas .price-cell { white-space: nowrap; border-left: 1px solid var(--line); }
+  #areas .price-cell { white-space: nowrap; }
   #areas .price-per-km { color: var(--muted); font-size: 11px; }
-  #areas th button.sub-sort { display: block; margin-top: 2px; font-size: 11px; text-transform: none; letter-spacing: 0; }
   #areas thead .c-cmp { font-size: 10px; letter-spacing: 0; }
   #areas input[type="checkbox"] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
   #areas thead tr:first-child th { border-bottom: 0; padding-bottom: 0; }
@@ -67,6 +66,13 @@
   .multi-list small { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
   .compare-btn { font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 4px; border: 1px solid var(--accent); background: var(--accent); color: var(--bg); cursor: pointer; }
   .compare-btn:disabled { opacity: .45; cursor: not-allowed; }
+  .selection { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-bottom: 4px; }
+  .selection ul { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
+  .chip { display: inline-flex; align-items: center; gap: 2px; font-size: 13px; padding: 2px 2px 2px 10px; border: 1px solid var(--accent); border-radius: 999px; background: var(--surface); color: var(--fg); }
+  .chip.is-hidden { border-style: dashed; border-color: var(--line); color: var(--muted); }
+  .chip button { font: inherit; line-height: 1; padding: 2px 6px; border: 0; border-radius: 999px; background: none; color: inherit; cursor: pointer; }
+  .chip button:hover { background: var(--bg); }
+  .selection-clear { font: inherit; font-size: 13px; color: var(--accent); background: none; border: 0; padding: 2px 4px; cursor: pointer; }
   .count { font-size: 13px; color: var(--muted); padding-bottom: 8px; }
   .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); }
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
@@ -96,6 +102,7 @@
     <label class="field"><span id="max-price-label"></span><input id="max-price" type="range" min="0" value="0"></label>
     <label class="check"><input id="fav" type="checkbox"><span data-i18n="favOnly"></span></label>
     <button type="button" class="compare-btn" id="compare" aria-describedby="compare-help"></button>
+    <div class="selection" id="selection"></div>
     <span class="count" id="count" aria-live="polite"></span>
   </div>
   <p class="note" id="compare-help" data-i18n="compareLimit"></p>

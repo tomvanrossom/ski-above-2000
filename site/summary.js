@@ -59,8 +59,8 @@ function scheduleRender() {
   });
 }
 
-function sortButton(key, label, isNumeric = true, attrs = {}) {
-  const b = el("button", { type: "button", ...attrs }, label);
+function sortButton(key, label, isNumeric = true) {
+  const b = el("button", { type: "button" }, label);
   if (state.sort === key) b.setAttribute("aria-sort", state.dir > 0 ? "ascending" : "descending");
   b.addEventListener("click", () =>
     setState({ sort: key, dir: state.sort === key ? -state.dir : (isNumeric ? -1 : 1) }));
@@ -70,7 +70,8 @@ function sortButton(key, label, isNumeric = true, attrs = {}) {
 function renderHead() {
   const top = el("tr");
   top.append(el("th", { class: "c-fav" }), el("th", { class: "c-cmp" }), el("th", { class: "c-name" }), el("th"));
-  const priceGroup = el("th", { class: "group start", scope: "colgroup" });
+  const priceGroup = el("th", { class: "group start", colspan: 2, scope: "colgroup" });
+  priceGroup.append(el("span", {}, I18N.t("colPrice")));
   top.append(priceGroup);
   GROUPS.forEach((g) => {
     const th = el("th", { class: "group start", colspan: 2, scope: "colgroup" });
@@ -88,10 +89,11 @@ function renderHead() {
   areaTh.append(sortButton("name", I18N.t("colArea"), false));
   const countryTh = el("th", { class: "left" });
   countryTh.append(sortButton("country", I18N.t("colCountry"), false));
-  const priceTh = el("th", { class: "start" });
-  priceTh.append(sortButton("price", I18N.t("colPrice")),
-    sortButton("price-high", `€${I18N.t("perKmHigh")}`, true, { class: "sub-sort" }));
-  sub.append(favTh, compareTh, areaTh, countryTh, priceTh);
+  const priceTotal = el("th", { class: "start" });
+  priceTotal.append(sortButton("price", I18N.t("colTotal")));
+  const priceHigh = el("th");
+  priceHigh.append(sortButton("price-high", I18N.t("colHigh")));
+  sub.append(favTh, compareTh, areaTh, countryTh, priceTotal, priceHigh);
   GROUPS.forEach((g) => {
     const total = el("th", { class: "start" });
     total.append(sortButton(`${g.key}-total`, I18N.t("colTotal")));
@@ -107,19 +109,18 @@ function kmCell(value, extraClass = "") {
   return el("td", cls ? { class: cls } : {}, value === 0 ? "–" : I18N.km(value));
 }
 
-function priceCell(area) {
+const missingCell = (extraClass = "") => el("td", { class: `${extraClass} zero`.trim() }, "–");
+
+function priceCells(area) {
   const price = Price.value(area);
-  const td = el("td", { class: "price-cell" });
-  if (price === null) {
-    td.textContent = "–";
-    return td;
-  }
-  td.append(el("div", {}, `€ ${I18N.num(price)}`));
-  const perKm = Price.perTotalKm(area);
-  if (perKm !== null) td.append(el("div", { class: "price-per-km" }, `${euroPerKm(perKm)}/km`));
   const perHighKm = Price.perHighKm(area);
-  if (perHighKm !== null) td.append(el("div", { class: "price-per-km" }, `${euroPerKm(perHighKm)}${I18N.t("perKmHigh")}`));
-  return td;
+  const high = perHighKm === null ? missingCell() : el("td", { class: "price-cell" }, euroPerKm(perHighKm));
+  if (price === null) return [missingCell("start"), high];
+  const total = el("td", { class: "price-cell start" });
+  total.append(el("div", {}, `€ ${I18N.num(price)}`));
+  const perKm = Price.perTotalKm(area);
+  if (perKm !== null) total.append(el("div", { class: "price-per-km" }, `${euroPerKm(perKm)}/km`));
+  return [total, high];
 }
 
 function shareBar(total, high, maxTotal) {
@@ -136,8 +137,7 @@ function compareCell(area) {
   box.addEventListener("change", () => {
     const next = new Set(selected);
     if (box.checked) next.add(area.slug); else next.delete(area.slug);
-    selected = next;
-    render();
+    setSelected(next);
   });
   td.append(box);
   return td;
@@ -186,7 +186,7 @@ function areaCell(a, parent) {
 
 function areaRow(a, maxTotal, attrs = {}, parent = null) {
   const tr = el("tr", attrs);
-  tr.append(favCell(a), compareCell(a), areaCell(a, parent), el("td", { class: "country" }, a.countries.map(I18N.country).join(" · ")), priceCell(a));
+  tr.append(favCell(a), compareCell(a), areaCell(a, parent), el("td", { class: "country" }, a.countries.map(I18N.country).join(" · ")), ...priceCells(a));
   GROUPS.forEach((g) => {
     const total = kmCell(fig(a, g.key, 0), "start");
     if (g.key === "all") total.append(shareBar(fig(a, "all", 0), fig(a, "all", 1), maxTotal));
@@ -213,10 +213,47 @@ function renderRows(list) {
 function compareTargets() {
   return CompareTargets.targets({
     selected: [...selected],
-    visible: withChildren(visible()).map((a) => a.slug),
     favourites: Favourites.list(),
     known: [...bySlug.keys()],
   });
+}
+
+const shownSlugs = (list) => new Set(list.flatMap((a) => [a.slug, ...(expanded.has(a.slug) ? childSlugs(a) : [])]));
+
+function setSelected(next) {
+  selected = next;
+  render();
+}
+
+function selectionChip(area, isShown) {
+  const parent = bySlug.get(area.parent);
+  const name = parent ? `${area.name} · ${parent.name}` : area.name;
+  const chip = el("li", { class: isShown ? "chip" : "chip is-hidden" });
+  chip.append(el("span", {}, name));
+  if (!isShown) chip.append(el("span", { class: "visually-hidden" }, ` ${I18N.t("hiddenItem")}`));
+  const remove = el("button", { type: "button", "aria-label": I18N.t("removeFromCompare", { name: area.name }) }, "×");
+  remove.addEventListener("click", () => {
+    const next = new Set(selected);
+    next.delete(area.slug);
+    setSelected(next);
+    (document.querySelector("#selection button") ?? document.getElementById("search")).focus();
+  });
+  chip.append(remove);
+  return chip;
+}
+
+function renderSelection(list) {
+  const box = document.getElementById("selection");
+  if (selected.size === 0) {
+    box.replaceChildren();
+    return;
+  }
+  const shown = shownSlugs(list);
+  const chips = el("ul");
+  chips.append(...[...selected].map((s) => selectionChip(bySlug.get(s), shown.has(s))));
+  const clear = el("button", { type: "button", class: "selection-clear" }, I18N.t("clearSelection"));
+  clear.addEventListener("click", () => setSelected(new Set()));
+  box.replaceChildren(chips, clear);
 }
 
 function renderCompareButton() {
@@ -246,10 +283,11 @@ function renderControls() {
 
 function render() {
   const list = visible();
-  selected = new Set(CompareTargets.visibleSelection([...selected], withChildren(list).map((a) => a.slug)));
+  selected = new Set([...selected].filter((s) => bySlug.has(s)));
   renderControls();
   renderHead();
   renderRows(list);
+  renderSelection(list);
   renderCompareButton();
   document.getElementById("count").textContent =
     I18N.t("count", { n: I18N.num(list.length), m: I18N.num(areas.length) });
