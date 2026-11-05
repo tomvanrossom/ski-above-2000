@@ -77,7 +77,7 @@ function renderFooter() {
   const credit = el("p");
   credit.append("Data from ", link("https://openskidata.org", "OpenSkiData / OpenSkiMap.org"), ", © ",
     link("https://www.openstreetmap.org/copyright", "OpenStreetMap contributors"),
-    " (ODbL), Skimap.org, Who's On First, © Mapterhorn.");
+    " (ODbL), Skimap.org, Who's On First, © Mapterhorn, slope roses from ", link("https://openskistats.org", "openskistats.org"), ".");
   const [before, after] = I18N.t("dataLicence").split("{odbl}");
   const licence = el("p");
   licence.append(before, link("https://opendatacommons.org/licenses/odbl/1-0/", "ODbL 1.0"), after, " ",

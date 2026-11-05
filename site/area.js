@@ -12,6 +12,7 @@ let area = null;
 let related = { parent: null, children: [] };
 let active = new Set(COLOURS.map((c) => c.key));
 let sort = { key: "start_m", dir: -1 };
+const loadedRoses = new Set();
 
 const main = () => document.getElementById("main");
 const sumKm = (list) => list.reduce((s, p) => s + p.length_m, 0) / 1000;
@@ -95,6 +96,23 @@ function renderBreakdown({ named, unnamed }) {
   box.append(table);
   return section("byDifficulty", box);
 }
+
+function renderRose() {
+  const src = `https://openskistats.org/ski-areas/roses-openskimap/${encodeURIComponent(area.id)}.svg`;
+  const img = el("img", { src, alt: I18N.t("roseAlt", { name: area.name }), loading: "lazy", width: 360, height: 360 });
+  const links = { ost: link("https://openskistats.org", "OpenSkiStats"), cc: link("https://creativecommons.org/licenses/by/4.0/", "CC BY 4.0") };
+  const caption = el("figcaption", { class: "note" });
+  caption.append(...I18N.t("roseCredit").split(/\{(\w+)\}/).map((part, i) => (i % 2 ? links[part] : part)));
+  const figure = el("figure", { class: "rose" });
+  figure.append(img, caption);
+  const s = section("roseTitle", el("p", { class: "note" }, I18N.t("roseNote")), figure);
+  if (loadedRoses.has(src)) return s;
+  s.classList.add("rose-pending");
+  img.addEventListener("load", () => { loadedRoses.add(src); s.classList.remove("rose-pending"); });
+  return s;
+}
+
+const hasRose = () => typeof area.id === "string" && area.id !== "" && area.kind !== "municipality";
 
 function renderChildren() {
   const list = el("ul", { class: "villages" });
@@ -196,7 +214,7 @@ function render() {
   chartBox.append(svg);
   renderChart(svg, all.all.filter((p) => active.has(p.difficulty)), all.all, focusRow);
   main().replaceChildren(renderHeader(all), ...(related.children.length ? [renderChildren()] : []),
-    renderBreakdown(all), renderFilters(all.all),
+    renderBreakdown(all), ...(hasRose() ? [renderRose()] : []), renderFilters(all.all),
     section("chartTitle", el("p", { class: "note" }, I18N.t("chartNote")), chartBox), renderTable(all.named));
 }
 
