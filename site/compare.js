@@ -15,11 +15,24 @@ const KM = { format: (n) => I18N.km(n), digits: 1 };
 const PCT = { format: (n) => I18N.pct(n), digits: 2 };
 const COUNT = { format: (n) => I18N.num(n), digits: 0 };
 const METRES = { format: (n) => I18N.m(n), digits: 0 };
+const PRICE = { format: (n) => n === null ? "–" : `€ ${I18N.num(n)}`, digits: 0 };
 const highShare = (a) => (fig(a, "all", 0) ? fig(a, "all", 1) / fig(a, "all", 0) : 0);
+const priceValue = (a) => {
+  const price = Number(a.skipass_price_eur);
+  return Number.isFinite(price) && price > 0 ? price : null;
+};
+const lowestPriceIndexes = (values, digits) => {
+  if (BestValue.lowestIndexes) return BestValue.lowestIndexes(values, digits);
+  const present = values.filter((value) => Number.isFinite(value));
+  if (present.length < 2) return [];
+  const highestPrice = Math.max(...present);
+  return BestValue.bestIndexes(values.map((value) => Number.isFinite(value) ? highestPrice - value : null), digits);
+};
 
 function rows() {
   const kmRow = (label, group, index, swatchOf) => ({ label, swatchOf, ...KM, best: true, raw: (a) => fig(a, group, index) });
   return [
+    { label: I18N.t("rowPrice"), ...PRICE, best: "lowest", bestLabel: I18N.t("cheapest"), raw: priceValue },
     kmRow(I18N.t("rowTotal"), "all", 0),
     kmRow(I18N.t("rowHigh"), "all", 1),
     { label: I18N.t("rowPctHigh"), ...PCT, best: true, raw: highShare },
@@ -35,10 +48,10 @@ function rows() {
   ];
 }
 
-function valueCell(text, isBest) {
+function valueCell(text, isBest, bestLabel = I18N.t("best")) {
   if (!isBest) return el("td", {}, text);
   const td = el("td", { class: "best" }, text);
-  td.append(el("span", { class: "visually-hidden" }, ` (${I18N.t("best")})`));
+  td.append(el("span", { class: "visually-hidden" }, ` (${bestLabel})`));
   return td;
 }
 
@@ -64,8 +77,10 @@ function bodyRow(row) {
     th.append(row.label);
   }
   const values = loaded.map(row.raw);
-  const best = new Set(row.best ? BestValue.bestIndexes(values, row.digits) : []);
-  tr.append(th, ...values.map((v, i) => valueCell(row.format(v), best.has(i))));
+  const best = new Set(row.best === "lowest"
+    ? lowestPriceIndexes(values, row.digits)
+    : row.best ? BestValue.bestIndexes(values, row.digits) : []);
+  tr.append(th, ...values.map((v, i) => valueCell(row.format(v), best.has(i), row.bestLabel)));
   return tr;
 }
 

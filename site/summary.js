@@ -4,8 +4,14 @@ const MAX_COMPARE = CompareTargets.MAX;
 let areas = [];
 let state = UrlState.parse(location.search);
 let selected = new Set();
+let maxPriceLimit = 0;
+let pendingRender = false;
 
 const fig = (area, group, index) => area.figures[group]?.[index] ?? 0;
+const priceValue = (area) => {
+  const price = Number(area.skipass_price_eur);
+  return Number.isFinite(price) && price > 0 ? price : null;
+};
 const sortValue = (area, key) => {
   const [group, kind] = key.split("-");
   return fig(area, group, kind === "high" ? 1 : 0);
@@ -17,6 +23,7 @@ function visible() {
     (state.countries.length === 0 || a.countries.some((c) => state.countries.includes(c))) &&
     (!text || a.name.toLocaleLowerCase().includes(text)) &&
     fig(a, "all", 1) >= state.min &&
+    (state.maxPrice === 0 || (priceValue(a) !== null && priceValue(a) <= state.maxPrice)) &&
     (!state.fav || Favourites.has(a.slug)));
 }
 
@@ -24,14 +31,31 @@ function compare(a, b) {
   const collator = I18N.collator();
   if (state.sort === "name") return collator.compare(a.name, b.name) * state.dir;
   if (state.sort === "country") return collator.compare(a.countries.join(), b.countries.join()) * state.dir;
+  if (state.sort === "price") {
+    const aPrice = priceValue(a);
+    const bPrice = priceValue(b);
+    if (aPrice === null && bPrice !== null) return 1;
+    if (aPrice !== null && bPrice === null) return -1;
+    if (aPrice !== null && bPrice !== null && aPrice !== bPrice) return (aPrice - bPrice) * state.dir;
+    return collator.compare(a.name, b.name);
+  }
   return (sortValue(a, state.sort) - sortValue(b, state.sort)) * state.dir || collator.compare(a.name, b.name);
 }
 
-function setState(changes) {
+function setState(changes, renderNow = true) {
   state = { ...state, ...changes };
   history.replaceState(null, "", location.pathname + UrlState.serialize(state));
   rememberSummaryUrl();
-  render();
+  if (renderNow) render();
+}
+
+function scheduleRender() {
+  if (pendingRender) return;
+  pendingRender = true;
+  requestAnimationFrame(() => {
+    pendingRender = false;
+    render();
+  });
 }
 
 function sortButton(key, label, isNumeric = true) {
@@ -45,6 +69,8 @@ function sortButton(key, label, isNumeric = true) {
 function renderHead() {
   const top = el("tr");
   top.append(el("th", { class: "c-fav" }), el("th", { class: "c-cmp" }), el("th", { class: "c-name" }), el("th"));
+  const priceGroup = el("th", { class: "group start", scope: "colgroup" });
+  top.append(priceGroup);
   GROUPS.forEach((g) => {
     const th = el("th", { class: "group start", colspan: 2, scope: "colgroup" });
     const span = el("span");
@@ -61,7 +87,9 @@ function renderHead() {
   areaTh.append(sortButton("name", I18N.t("colArea"), false));
   const countryTh = el("th", { class: "left" });
   countryTh.append(sortButton("country", I18N.t("colCountry"), false));
-  sub.append(favTh, compareTh, areaTh, countryTh);
+  const priceTh = el("th", { class: "start" });
+  priceTh.append(sortButton("price", I18N.t("colPrice")));
+  sub.append(favTh, compareTh, areaTh, countryTh, priceTh);
   GROUPS.forEach((g) => {
     const total = el("th", { class: "start" });
     total.append(sortButton(`${g.key}-total`, I18N.t("colTotal")));
@@ -75,6 +103,19 @@ function renderHead() {
 function kmCell(value, extraClass = "") {
   const cls = [extraClass, value === 0 ? "zero" : ""].filter(Boolean).join(" ");
   return el("td", cls ? { class: cls } : {}, value === 0 ? "–" : I18N.km(value));
+}
+
+function priceCell(area) {
+  const price = priceValue(area);
+  const td = el("td", { class: "price-cell" });
+  if (price === null) {
+    td.textContent = "–";
+    return td;
+  }
+  td.append(el("div", {}, `€ ${I18N.num(price)}`));
+  const totalKm = fig(area, "all", 0);
+  if (totalKm > 0) td.append(el("div", { class: "price-per-km" }, `€ ${I18N.num(price / totalKm, 2)}/km`));
+  return td;
 }
 
 function shareBar(total, high, maxTotal) {
@@ -119,7 +160,7 @@ function renderRows(list) {
   const maxTotal = Math.max(...list.map((a) => fig(a, "all", 0)), 1);
   const rows = [...list].sort(compare).map((a) => {
     const tr = el("tr");
-    tr.append(favCell(a), compareCell(a), areaCell(a), el("td", { class: "country" }, a.countries.map(I18N.country).join(" · ")));
+    tr.append(favCell(a), compareCell(a), areaCell(a), el("td", { class: "country" }, a.countries.map(I18N.country).join(" · ")), priceCell(a));
     GROUPS.forEach((g) => {
       const total = kmCell(fig(a, g.key, 0), "start");
       if (g.key === "all") total.append(shareBar(fig(a, "all", 0), fig(a, "all", 1), maxTotal));
@@ -150,6 +191,10 @@ function renderControls() {
   const slider = document.getElementById("min");
   slider.value = state.min;
   document.getElementById("min-label").textContent = I18N.t("minKm", { n: I18N.num(state.min) });
+  const priceSlider = document.getElementById("max-price");
+  const displayedMaxPrice = state.maxPrice || maxPriceLimit;
+  priceSlider.value = displayedMaxPrice;
+  document.getElementById("max-price-label").textContent = I18N.t("maxPrice", { n: `€ ${I18N.num(displayedMaxPrice)}` });
   document.getElementById("fav").checked = state.fav;
   const search = document.getElementById("search");
   if (search.value !== state.q) search.value = state.q;
@@ -184,11 +229,22 @@ function renderCountryOptions() {
   return countries;
 }
 
-function wireControls(maxHigh) {
+function wireControls(maxHigh, maxPrice) {
   const slider = document.getElementById("min");
   slider.max = maxHigh;
   slider.step = maxHigh > 100 ? 5 : 1;
-  slider.addEventListener("input", () => setState({ min: Number(slider.value) }));
+  slider.addEventListener("input", () => {
+    setState({ min: Number(slider.value) }, false);
+    scheduleRender();
+  });
+  maxPriceLimit = maxPrice;
+  const priceSlider = document.getElementById("max-price");
+  priceSlider.max = maxPrice;
+  priceSlider.step = maxPrice > 100 ? 5 : 1;
+  priceSlider.addEventListener("input", () => {
+    setState({ maxPrice: Number(priceSlider.value) }, false);
+    scheduleRender();
+  });
   document.getElementById("search").addEventListener("input", (e) => setState({ q: e.target.value }));
   document.getElementById("fav").addEventListener("change", (e) => setState({ fav: e.target.checked }));
   document.getElementById("country-clear").addEventListener("click", () => setState({ countries: [] }));
@@ -215,8 +271,14 @@ fetchJSON("data/areas.json")
     areas = data.filter(isValidArea);
     const countries = renderCountryOptions();
     const maxHigh = Math.ceil(Math.max(0, ...areas.map((a) => fig(a, "all", 1))));
-    wireControls(maxHigh);
-    setState({ countries: state.countries.filter((c) => countries.includes(c)), min: Math.min(state.min, maxHigh) });
+    const prices = areas.map(priceValue).filter((price) => price !== null);
+    const maxPrice = Math.ceil(Math.max(0, ...prices));
+    wireControls(maxHigh, maxPrice);
+    setState({
+      countries: state.countries.filter((c) => countries.includes(c)),
+      min: Math.min(state.min, maxHigh),
+      maxPrice: state.maxPrice > 0 ? Math.min(state.maxPrice, maxPrice) : 0,
+    });
   })
   .catch((e) => {
     console.error(e);

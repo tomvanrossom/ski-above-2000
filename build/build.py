@@ -4,16 +4,93 @@ import datetime
 import json
 import shutil
 import sys
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from alps import contains, load_boundary  # noqa: E402
-from areas import MERGE_OF, PASS_NETWORKS, assign_slugs, sub_area_ids  # noqa: E402
+from areas import MERGED_AREAS, MERGE_OF, PASS_NETWORKS, assign_slugs, sub_area_ids  # noqa: E402
 from pistes import (figures, group_unnamed, merge_segments, read_piste_rows, to_float, to_run,  # noqa: E402
                     unnamed_segments, unnamed_share)
 
 AREA_COLUMNS = {"name", "countries", "regions", "has_downhill", "id", "lat", "lng"}
+PRICE_COLUMN = "skipass_price_eur"
+DEFAULT_PRICES = Path(__file__).parent.parent / "refs" / "skipasprijzen.csv"
+PRICE_COUNTRIES = {
+    "AT": "Austria", "CH": "Switzerland", "FR": "France", "IT": "Italy", "DE": "Germany",
+    "SI": "Slovenia", "LI": "Liechtenstein", "BE": "Belgium", "BG": "Bulgaria",
+    "CZ": "Czechia", "NO": "Norway", "SE": "Sweden", "US": "United States",
+    "CA": "Canada", "TR": "Turkey", "ES": "Spain", "FI": "Finland", "AD": "Andorra", "SK": "Slovakia",
+}
+
+
+def read_prices(prices_csv):
+    prices = defaultdict(set)
+    with open(prices_csv, encoding="utf-8-sig", newline="") as source:
+        reader = csv.DictReader(source)
+        if not {"Skigebied", "Land", PRICE_COLUMN} <= set(reader.fieldnames or []):
+            raise ValueError(f"{prices_csv}: missing normalized price columns")
+        for row in reader:
+            value = row[PRICE_COLUMN].strip()
+            if not value:
+                continue
+            if not value.isascii() or not value.isdigit() or int(value) <= 0:
+                raise ValueError(f"{prices_csv}: invalid price for {row['Skigebied']}: {value!r}")
+            country = PRICE_COUNTRIES.get(row["Land"], row["Land"])
+            prices[(row["Skigebied"], country)].add(int(value))
+    for key, values in prices.items():
+        if len(values) != 1:
+            raise ValueError(f"{prices_csv}: conflicting prices for {key}: {sorted(values)}")
+    return {key: next(iter(values)) for key, values in prices.items()}
+
+
+def inject_prices(areas_csv, prices_csv):
+    prices = read_prices(prices_csv)
+    rows = read_areas(areas_csv)
+    with open(areas_csv, encoding="utf-8", newline="") as source:
+        fields = list(csv.DictReader(source).fieldnames)
+    if PRICE_COLUMN not in fields:
+        fields.append(PRICE_COLUMN)
+    identities = defaultdict(set)
+    group_countries = defaultdict(set)
+    for area in rows:
+        name = MERGE_OF.get(area["name"], area["name"])
+        identity = name if name in MERGED_AREAS else area["id"]
+        group_countries[name].update(area["countries"].split(";"))
+        for country in ["", *area["countries"].split(";")]:
+            identities[(name, country)].add(identity)
+    matched = set()
+    for area in rows:
+        name = MERGE_OF.get(area["name"], area["name"])
+        countries = group_countries[name] if name in MERGED_AREAS else area["countries"].split(";")
+        keys = [(name, country) for country in countries]
+        keys.append((name, ""))
+        keys = [key for key in keys if key in prices and len(identities[key]) == 1 and name not in PASS_NETWORKS]
+        values = {prices[key] for key in keys}
+        if len(values) > 1:
+            raise ValueError(f"{areas_csv}: conflicting prices for {name}")
+        area[PRICE_COLUMN] = str(next(iter(values))) if values else ""
+        matched.update(keys)
+    destination = Path(areas_csv)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="", dir=destination.parent,
+                                         delete=False) as target:
+            temporary = Path(target.name)
+            writer = csv.DictWriter(target, fieldnames=fields)
+            writer.writeheader()
+            writer.writerows(rows)
+        temporary.replace(destination)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    print(f"Prices: {len(matched)} matched source keys, {len(prices) - len(matched)} unmatched")
+
+
+def group_price(members):
+    values = {member.get(PRICE_COLUMN, "") for member in members}
+    return int(next(iter(values))) if len(values) == 1 and "" not in values else None
 
 
 def read_runs(runs_csv):
@@ -47,7 +124,7 @@ def rounded(item, keys):
             for k, v in item.items() if k in keys}
 
 
-SUMMARY_KEYS = ("slug", "name", "countries", "regions", "lat", "lng", "id", "figures", "unnamed_share")
+SUMMARY_KEYS = ("slug", "name", "countries", "regions", "lat", "lng", "id", "figures", "unnamed_share", PRICE_COLUMN)
 PISTE_KEYS = ("name", "ref", "difficulty", "length_m", "start_m", "end_m", "lat", "lng", "id", "segments")
 
 
@@ -63,6 +140,7 @@ def summarise(members, counted_by_area):
         "lat": round(float(first["lat"]), 5),
         "lng": round(float(first["lng"]), 5),
         "id": first["id"],
+        PRICE_COLUMN: group_price(members),
         "figures": figures(pistes + unnamed),
         "unnamed_share": unnamed_share(pistes, unnamed),
         "pistes": [rounded(p, PISTE_KEYS) for p in pistes],
@@ -93,7 +171,8 @@ def write_json(path, data):
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
 
 
-def build(runs_csv, areas_csv, boundary_path, out_dir):
+def build(runs_csv, areas_csv, boundary_path, out_dir, prices_csv=DEFAULT_PRICES):
+    inject_prices(areas_csv, prices_csv)
     boundary = load_boundary(boundary_path)
     run_ids_by_area, counted_by_area = read_runs(runs_csv)
     all_areas = read_areas(areas_csv)
@@ -118,10 +197,11 @@ def main():
     parser = argparse.ArgumentParser(description="Build the site data for Alpine ski areas.")
     parser.add_argument("--runs", required=True)
     parser.add_argument("--areas", required=True)
+    parser.add_argument("--prices", default=str(DEFAULT_PRICES))
     parser.add_argument("--boundary", default=str(Path(__file__).parent.parent / "alps" / "alpine-convention.geojson"))
     parser.add_argument("--out", default=str(Path(__file__).parent.parent / "site" / "data"))
     args = parser.parse_args()
-    areas = build(args.runs, args.areas, args.boundary, args.out)
+    areas = build(args.runs, args.areas, args.boundary, args.out, args.prices)
     print(len(areas), "Alpine ski areas written to", args.out)
 
 
