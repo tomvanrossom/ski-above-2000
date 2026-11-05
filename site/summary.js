@@ -243,18 +243,16 @@ function selectionChip(area, isShown) {
 }
 
 function renderSelection(list) {
-  const box = document.getElementById("selection");
-  if (selected.size === 0) {
-    box.replaceChildren();
-    return;
-  }
+  const isEmpty = selected.size === 0;
   const shown = shownSlugs(list);
-  const chips = el("ul");
-  chips.append(...[...selected].map((s) => selectionChip(bySlug.get(s), shown.has(s))));
-  const clear = el("button", { type: "button", class: "selection-clear" }, I18N.t("clearSelection"));
-  clear.addEventListener("click", () => setSelected(new Set()));
-  box.replaceChildren(chips, clear);
+  document.getElementById("selection")
+    .replaceChildren(...[...selected].map((s) => selectionChip(bySlug.get(s), shown.has(s))));
+  document.getElementById("selection-clear").hidden = isEmpty;
+  document.getElementById("compare-help").classList.toggle("visually-hidden", !isEmpty);
 }
+
+const hasActiveFilter = () =>
+  state.q.trim() !== "" || state.countries.length > 0 || state.min > 0 || state.maxPrice > 0 || state.fav;
 
 function renderCompareButton() {
   const targets = compareTargets();
@@ -279,6 +277,7 @@ function renderControls() {
   document.getElementById("country-summary").textContent = chosen.length === 0 ? I18N.t("allCountries")
     : chosen.length <= 2 ? chosen.map(I18N.country).join(", ") : I18N.t("nCountries", { n: chosen.length });
   document.querySelectorAll("#country-list input").forEach((box) => { box.checked = chosen.includes(box.value); });
+  document.getElementById("reset-filters").hidden = !hasActiveFilter();
 }
 
 function render() {
@@ -326,6 +325,14 @@ function wireControls(maxHigh, minPrice, maxPrice) {
   document.getElementById("search").addEventListener("input", (e) => setState({ q: e.target.value }));
   document.getElementById("fav").addEventListener("change", (e) => setState({ fav: e.target.checked }));
   document.getElementById("country-clear").addEventListener("click", () => setState({ countries: [] }));
+  document.getElementById("reset-filters").addEventListener("click", () => {
+    setState({ q: "", countries: [], min: 0, maxPrice: 0, fav: false });
+    document.getElementById("search").focus();
+  });
+  document.getElementById("selection-clear").addEventListener("click", () => {
+    setSelected(new Set());
+    document.getElementById("search").focus();
+  });
   document.getElementById("compare").addEventListener("click", () => {
     location.href = `compare.html?a=${compareTargets().map(encodeURIComponent).join(",")}`;
   });

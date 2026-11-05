@@ -39,19 +39,23 @@
   .area-meta a { color: var(--accent); }
   .bar { display: block; height: 6px; margin-top: 4px; border-radius: 3px; background: var(--low); overflow: hidden; margin-left: auto; }
   .bar i { display: block; height: 100%; background: var(--accent); }
-  .controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: end; }
-  .field { display: grid; gap: 4px; font-size: 12px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
-  .field input[type="search"] {
-    font: inherit; font-size: 15px; text-transform: none; letter-spacing: 0; color: var(--fg); background: var(--surface);
-    border: 1px solid var(--line); border-radius: 4px; padding: 6px 10px; min-width: 0; max-width: 100%;
+  .lead { margin: 6px 0 0; max-width: 70ch; font-size: 17px; line-height: 1.5; color: var(--muted); }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; min-width: 0; }
+  .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 16px 20px; align-items: end; }
+  .field { display: grid; gap: 6px; min-width: 0; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+  .field > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .field input[type="search"], .multi summary {
+    height: 36px; width: 100%; font: inherit; font-size: 15px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--fg);
+    background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 10px; min-width: 0;
   }
-  .field input[type="range"] { width: min(260px, 80vw); accent-color: var(--accent); }
-  .check { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; cursor: pointer; padding-bottom: 6px; }
+  .field input[type="range"] { height: 36px; width: 100%; margin: 0; accent-color: var(--accent); }
+  .filter-end { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; min-height: 36px; }
+  .check { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; cursor: pointer; }
+  .check input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+  .text-btn { font: inherit; font-size: 13px; color: var(--accent); background: none; border: 0; padding: 4px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+  .text-btn[hidden] { display: none; }
   .multi { position: relative; }
-  .multi summary {
-    list-style: none; cursor: pointer; min-width: 200px; max-width: 100%; padding: 6px 30px 6px 10px; border: 1px solid var(--line);
-    border-radius: 4px; background: var(--surface); color: var(--fg); position: relative; font-size: 15px; text-transform: none; letter-spacing: 0;
-  }
+  .multi summary { list-style: none; cursor: pointer; padding-right: 30px; position: relative; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .multi summary::-webkit-details-marker { display: none; }
   .multi summary::after { content: "▾"; position: absolute; right: 10px; color: var(--muted); }
   .multi-panel {
@@ -64,16 +68,28 @@
   .multi-list label { display: flex; align-items: center; gap: 8px; padding: 4px; border-radius: 4px; cursor: pointer; font-size: 14px; color: var(--fg); }
   .multi-list label:hover { background: var(--bg); }
   .multi-list small { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .compare-btn { font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 4px; border: 1px solid var(--accent); background: var(--accent); color: var(--bg); cursor: pointer; }
+  .compare-bar {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 10px 16px;
+    background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  }
+  .selection-area { flex: 1 1 260px; min-width: 0; }
+  .compare-help { margin: 0; font-size: 14px; color: var(--muted); }
+  .compare-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-left: auto; }
+  .compare-btn { height: 36px; font: inherit; font-size: 14px; font-weight: 600; padding: 0 14px; border-radius: 4px; border: 1px solid var(--accent); background: var(--accent); color: var(--bg); cursor: pointer; }
   .compare-btn:disabled { opacity: .45; cursor: not-allowed; }
-  .selection { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-bottom: 4px; }
-  .selection ul { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
+  .selection { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
+  .selection:empty { display: none; }
+  @media (max-width: 520px) {
+    .compare-actions { width: 100%; }
+    .compare-btn { flex: 1; }
+  }
   .chip { display: inline-flex; align-items: center; gap: 2px; font-size: 13px; padding: 2px 2px 2px 10px; border: 1px solid var(--accent); border-radius: 999px; background: var(--surface); color: var(--fg); }
   .chip.is-hidden { border-style: dashed; border-color: var(--line); color: var(--muted); }
   .chip button { font: inherit; line-height: 1; padding: 2px 6px; border: 0; border-radius: 999px; background: none; color: inherit; cursor: pointer; }
   .chip button:hover { background: var(--bg); }
-  .selection-clear { font: inherit; font-size: 13px; color: var(--accent); background: none; border: 0; padding: 2px 4px; cursor: pointer; }
-  .count { font-size: 13px; color: var(--muted); padding-bottom: 8px; }
+  .results { display: grid; gap: 8px; min-width: 0; }
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 18px; }
+  .count { font-size: 14px; font-weight: 600; color: var(--fg); }
   .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); }
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
   .legend b { width: 18px; height: 6px; border-radius: 3px; }
@@ -85,8 +101,11 @@
     <span class="eyebrow" data-i18n="eyebrow"></span>
     <div class="lang" data-lang-switch></div>
   </div>
-  <header><h1 data-i18n="siteTitle"></h1></header>
-  <div class="controls">
+  <header>
+    <h1 data-i18n="siteTitle"></h1>
+    <p class="lead" data-i18n="intro"></p>
+  </header>
+  <div class="panel filters">
     <label class="field"><span data-i18n="searchLabel"></span><input id="search" type="search" autocomplete="off" data-i18n-placeholder="searchPlaceholder"></label>
     <div class="field">
       <span id="country-label" data-i18n="countries"></span>
@@ -100,22 +119,35 @@
     </div>
     <label class="field"><span id="min-label"></span><input id="min" type="range" min="0" value="0"></label>
     <label class="field"><span id="max-price-label"></span><input id="max-price" type="range" min="0" value="0"></label>
-    <label class="check"><input id="fav" type="checkbox"><span data-i18n="favOnly"></span></label>
-    <button type="button" class="compare-btn" id="compare" aria-describedby="compare-help"></button>
-    <div class="selection" id="selection"></div>
-    <span class="count" id="count" aria-live="polite"></span>
+    <div class="filter-end">
+      <label class="check"><input id="fav" type="checkbox"><span data-i18n="favOnly"></span></label>
+      <button type="button" class="text-btn" id="reset-filters" data-i18n="resetFilters" hidden></button>
+    </div>
   </div>
-  <p class="note" id="compare-help" data-i18n="compareLimit"></p>
-  <p class="note" data-i18n="intro"></p>
-  <div class="legend">
-    <span><b style="background: var(--accent)"></b><span data-i18n="legendHigh"></span></span>
-    <span><b style="background: var(--low)"></b><span data-i18n="legendLow"></span></span>
+  <div class="panel compare-bar">
+    <div class="selection-area">
+      <p class="compare-help" id="compare-help" data-i18n="compareLimit"></p>
+      <ul class="selection" id="selection"></ul>
+    </div>
+    <div class="compare-actions">
+      <button type="button" class="text-btn" id="selection-clear" data-i18n="clearSelection" hidden></button>
+      <button type="button" class="compare-btn" id="compare" aria-describedby="compare-help"></button>
+    </div>
   </div>
-  <div class="table-box" id="table-box">
-    <table id="areas">
-      <thead id="head"></thead>
-      <tbody id="rows"></tbody>
-    </table>
+  <div class="results">
+    <div class="toolbar">
+      <span class="count" id="count" aria-live="polite"></span>
+      <div class="legend">
+        <span><b style="background: var(--accent)"></b><span data-i18n="legendHigh"></span></span>
+        <span><b style="background: var(--low)"></b><span data-i18n="legendLow"></span></span>
+      </div>
+    </div>
+    <div class="table-box" id="table-box">
+      <table id="areas">
+        <thead id="head"></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
   </div>
   <p class="note" data-i18n="method"></p>
   <footer></footer>
