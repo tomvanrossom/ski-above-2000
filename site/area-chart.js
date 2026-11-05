@@ -1,4 +1,6 @@
 const isLow = (p) => p.end_m < HIGH_END_M;
+const SHORT_PISTE_M = 100;
+const isShort = (p) => p.length_m < SHORT_PISTE_M;
 const CHART = { barW: 10, gap: 4, left: 52, right: 16, top: 16, bottom: 28, height: 360, step: 250, minWidth: 600 };
 
 function barStyle(p) {
@@ -16,7 +18,7 @@ function showTip(e, p) {
 
 function hideTip() { document.getElementById("tip").hidden = true; }
 
-function renderChart(svg, items, allItems, onPick) {
+function renderChart(svg, items, allItems, onPick, hidden = 0) {
   const { barW, gap, left, right, top, bottom, height: h, step } = CHART;
   const data = [...items].sort((a, b) => b.start_m - a.start_m);
   const width = Math.max(left + right + data.length * (barW + gap), CHART.minWidth);
@@ -45,6 +47,8 @@ function renderChart(svg, items, allItems, onPick) {
   });
   nodes.push(el("svg:line", { class: "threshold", x1: left, x2: width - right, y1: y(HIGH_END_M), y2: y(HIGH_END_M) }));
   nodes.push(el("svg:text", { x: width - right, y: y(HIGH_END_M) - 5, "text-anchor": "end" }, I18N.t("chartThreshold")));
-  nodes.push(el("svg:text", { x: left, y: h - 8 }, I18N.t("chartCount", { n: I18N.num(data.length) })));
+  nodes.push(el("svg:text", { x: left, y: h - 8 }, hidden
+    ? I18N.t("chartCountHidden", { n: I18N.num(data.length), h: I18N.num(hidden), m: I18N.m(SHORT_PISTE_M) })
+    : I18N.t("chartCount", { n: I18N.num(data.length) })));
   svg.replaceChildren(...nodes);
 }

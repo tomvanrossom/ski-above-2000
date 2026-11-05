@@ -14,6 +14,7 @@ let related = { parent: null, children: [] };
 let active = new Set(COLOURS.map((c) => c.key));
 let sort = { key: "start_m", dir: -1 };
 let page = 1;
+let hideShort = true;
 const loadedRoses = new Set();
 
 const main = () => document.getElementById("main");
@@ -250,17 +251,35 @@ function renderTable({ named, all }) {
   return s;
 }
 
+function renderHideShort() {
+  const box = el("input", { id: "hide-short", type: "checkbox" });
+  box.checked = hideShort;
+  box.addEventListener("change", () => {
+    hideShort = box.checked;
+    render();
+    document.getElementById("hide-short")?.focus();
+  });
+  const label = el("label", { class: "check" });
+  label.append(box, el("span", {}, I18N.t("hideShort", { m: I18N.m(SHORT_PISTE_M) })));
+  return label;
+}
+
+function renderChartSection(all) {
+  const shown = all.all.filter((p) => active.has(p.difficulty));
+  const bars = hideShort ? shown.filter((p) => !isShort(p)) : shown;
+  const svg = el("svg:svg", { id: "chart", role: "img", "aria-label": I18N.t("chartAria") });
+  const chartBox = el("div", { class: "chart-box" });
+  chartBox.append(svg);
+  renderChart(svg, bars, all.all, focusRow, shown.length - bars.length);
+  return section("chartTitle", el("p", { class: "note" }, I18N.t("chartNote")), renderHideShort(), chartBox);
+}
+
 function render() {
   if (!area) return;
   document.title = `${area.name} · ${I18N.t("siteTitle")}`;
   const all = items();
-  const svg = el("svg:svg", { id: "chart", role: "img", "aria-label": I18N.t("chartAria") });
-  const chartBox = el("div", { class: "chart-box" });
-  chartBox.append(svg);
-  renderChart(svg, all.all.filter((p) => active.has(p.difficulty)), all.all, focusRow);
   main().replaceChildren(renderHeader(all), ...(related.children.length ? [renderChildren()] : []),
-    renderPair(all), renderFilters(all.all, "filterLabel", "chart"),
-    section("chartTitle", el("p", { class: "note" }, I18N.t("chartNote")), chartBox), renderTable(all));
+    renderPair(all), renderFilters(all.all, "filterLabel", "chart"), renderChartSection(all), renderTable(all));
 }
 
 function renderNotFound() {
@@ -298,7 +317,8 @@ async function load() {
   area = null;
   related = { parent: null, children: [] };
   page = 1;
-  const slug = decodeURIComponent(location.hash.slice(1));
+  hideShort = true;
+  const slug =decodeURIComponent(location.hash.slice(1));
   if (!SLUG_RE.test(slug)) return renderNotFound();
   try {
     const response = await fetch(`data/areas/${slug}.json`);
