@@ -4,7 +4,6 @@ const MAX_COMPARE = CompareTargets.MAX;
 let areas = [];
 let state = UrlState.parse(location.search);
 let selected = new Set();
-let maxPriceLimit = 0;
 let pendingRender = false;
 
 const fig = (area, group, index) => area.figures[group]?.[index] ?? 0;
@@ -192,9 +191,10 @@ function renderControls() {
   slider.value = state.min;
   document.getElementById("min-label").textContent = I18N.t("minKm", { n: I18N.num(state.min) });
   const priceSlider = document.getElementById("max-price");
-  const displayedMaxPrice = state.maxPrice || maxPriceLimit;
-  priceSlider.value = displayedMaxPrice;
-  document.getElementById("max-price-label").textContent = I18N.t("maxPrice", { n: `€ ${I18N.num(displayedMaxPrice)}` });
+  priceSlider.value = state.maxPrice || priceSlider.max;
+  document.getElementById("max-price-label").textContent = state.maxPrice
+    ? I18N.t("maxPrice", { n: `€ ${I18N.num(state.maxPrice)}` })
+    : I18N.t("anyPrice");
   document.getElementById("fav").checked = state.fav;
   const search = document.getElementById("search");
   if (search.value !== state.q) search.value = state.q;
@@ -229,7 +229,7 @@ function renderCountryOptions() {
   return countries;
 }
 
-function wireControls(maxHigh, maxPrice) {
+function wireControls(maxHigh, minPrice, maxPrice) {
   const slider = document.getElementById("min");
   slider.max = maxHigh;
   slider.step = maxHigh > 100 ? 5 : 1;
@@ -237,12 +237,12 @@ function wireControls(maxHigh, maxPrice) {
     setState({ min: Number(slider.value) }, false);
     scheduleRender();
   });
-  maxPriceLimit = maxPrice;
   const priceSlider = document.getElementById("max-price");
+  priceSlider.min = minPrice;
   priceSlider.max = maxPrice;
-  priceSlider.step = maxPrice > 100 ? 5 : 1;
   priceSlider.addEventListener("input", () => {
-    setState({ maxPrice: Number(priceSlider.value) }, false);
+    const value = Number(priceSlider.value);
+    setState({ maxPrice: value >= maxPrice ? 0 : value }, false);
     scheduleRender();
   });
   document.getElementById("search").addEventListener("input", (e) => setState({ q: e.target.value }));
@@ -273,11 +273,12 @@ fetchJSON("data/areas.json")
     const maxHigh = Math.ceil(Math.max(0, ...areas.map((a) => fig(a, "all", 1))));
     const prices = areas.map(priceValue).filter((price) => price !== null);
     const maxPrice = Math.ceil(Math.max(0, ...prices));
-    wireControls(maxHigh, maxPrice);
+    const minPrice = Math.floor(Math.min(maxPrice, ...prices));
+    wireControls(maxHigh, minPrice, maxPrice);
     setState({
       countries: state.countries.filter((c) => countries.includes(c)),
       min: Math.min(state.min, maxHigh),
-      maxPrice: state.maxPrice > 0 ? Math.min(state.maxPrice, maxPrice) : 0,
+      maxPrice: state.maxPrice < maxPrice ? state.maxPrice : 0,
     });
   })
   .catch((e) => {

@@ -1,3 +1,5 @@
 .cache/
 site/data/
+*.csv
+!refs/skipasprijzen.csv
 __pycache__/

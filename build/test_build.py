@@ -1,10 +1,14 @@
+import io
 import sys
+import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from alps import contains, in_polygon  # noqa: E402
 from areas import assign_slugs, slugify, sub_area_ids  # noqa: E402
+from build import PRICE_COLUMN, apply_prices, read_prices  # noqa: E402
 from check_output import REQUIRED_AREAS, check_summary  # noqa: E402
 from pistes import figures, group_unnamed, merge_segments, to_run, unnamed_segments, unnamed_share  # noqa: E402
 
@@ -120,6 +124,57 @@ class Slugs(unittest.TestCase):
         slugs = assign_slugs([(1, "Sankt Jakob", ["Austria"]), (2, "Sankt Jakob", ["Italy"]),
                               (3, "Sankt Jakob", ["Italy"]), (4, "Arosa", ["Switzerland"])])
         self.assertEqual(slugs, {1: "sankt-jakob", 2: "sankt-jakob-it", 3: "sankt-jakob-it-2", 4: "arosa"})
+
+
+class ReadPrices(unittest.TestCase):
+    def prices(self, *lines, header="Skigebied,Land,skipass_price_eur"):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        path = Path(directory.name) / "prices.csv"
+        path.write_text("\n".join([header, *lines]) + "\n", encoding="utf-8")
+        return read_prices(path)
+
+    def test_country_codes_are_mapped_and_empty_prices_skipped(self):
+        self.assertEqual(self.prices("Arosa,CH,350", "Ischgl,AT,", "Elsewhere,Narnia,200"),
+                         {("Arosa", "Switzerland"): 350, ("Elsewhere", "Narnia"): 200})
+
+    def test_invalid_price_raises(self):
+        for value in ("abc", "0", "-5", "12.5"):
+            with self.assertRaises(ValueError):
+                self.prices(f"Arosa,CH,{value}")
+
+    def test_conflicting_prices_raise(self):
+        with self.assertRaises(ValueError):
+            self.prices("Arosa,CH,350", "Arosa,CH,360")
+
+    def test_missing_columns_raise(self):
+        with self.assertRaises(ValueError):
+            self.prices("Arosa,CH", header="Skigebied,Land")
+
+
+def area(name, country, area_id):
+    return {"name": name, "countries": country, "id": area_id}
+
+
+class ApplyPrices(unittest.TestCase):
+    def priced(self, rows, prices):
+        with redirect_stdout(io.StringIO()):
+            return [a[PRICE_COLUMN] for a in apply_prices(rows, prices)]
+
+    def test_plain_match_by_name_and_country(self):
+        rows = [area("Arosa", "Switzerland", "a"), area("Arosa", "Austria", "b")]
+        self.assertEqual(self.priced(rows, {("Arosa", "Switzerland"): 350}), ["350", ""])
+
+    def test_merged_area_members_share_the_group_price(self):
+        rows = [area("La Rosière", "France", "a"), area("La Thuile ski", "Italy", "b")]
+        self.assertEqual(self.priced(rows, {("Espace San Bernardo", "Italy"): 300}), ["300", "300"])
+
+    def test_pass_network_gets_no_price(self):
+        self.assertEqual(self.priced([area("Stubai", "Austria", "a")], {("Stubai", "Austria"): 400}), [""])
+
+    def test_name_shared_by_several_ids_gets_no_price(self):
+        rows = [area("Sankt Jakob", "Austria", "a"), area("Sankt Jakob", "Austria", "b")]
+        self.assertEqual(self.priced(rows, {("Sankt Jakob", "Austria"): 250}), ["", ""])
 
 
 class SubAreas(unittest.TestCase):

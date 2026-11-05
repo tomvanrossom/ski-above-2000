@@ -21,13 +21,6 @@ const priceValue = (a) => {
   const price = Number(a.skipass_price_eur);
   return Number.isFinite(price) && price > 0 ? price : null;
 };
-const lowestPriceIndexes = (values, digits) => {
-  if (BestValue.lowestIndexes) return BestValue.lowestIndexes(values, digits);
-  const present = values.filter((value) => Number.isFinite(value));
-  if (present.length < 2) return [];
-  const highestPrice = Math.max(...present);
-  return BestValue.bestIndexes(values.map((value) => Number.isFinite(value) ? highestPrice - value : null), digits);
-};
 
 function rows() {
   const kmRow = (label, group, index, swatchOf) => ({ label, swatchOf, ...KM, best: true, raw: (a) => fig(a, group, index) });
@@ -78,7 +71,7 @@ function bodyRow(row) {
   }
   const values = loaded.map(row.raw);
   const best = new Set(row.best === "lowest"
-    ? lowestPriceIndexes(values, row.digits)
+    ? BestValue.lowestIndexes(values, row.digits)
     : row.best ? BestValue.bestIndexes(values, row.digits) : []);
   tr.append(th, ...values.map((v, i) => valueCell(row.format(v), best.has(i), row.bestLabel)));
   return tr;

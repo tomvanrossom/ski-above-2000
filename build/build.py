@@ -4,7 +4,6 @@ import datetime
 import json
 import shutil
 import sys
-import tempfile
 from collections import defaultdict
 from pathlib import Path
 
@@ -45,13 +44,7 @@ def read_prices(prices_csv):
     return {key: next(iter(values)) for key, values in prices.items()}
 
 
-def inject_prices(areas_csv, prices_csv):
-    prices = read_prices(prices_csv)
-    rows = read_areas(areas_csv)
-    with open(areas_csv, encoding="utf-8", newline="") as source:
-        fields = list(csv.DictReader(source).fieldnames)
-    if PRICE_COLUMN not in fields:
-        fields.append(PRICE_COLUMN)
+def apply_prices(rows, prices):
     identities = defaultdict(set)
     group_countries = defaultdict(set)
     for area in rows:
@@ -61,6 +54,7 @@ def inject_prices(areas_csv, prices_csv):
         for country in ["", *area["countries"].split(";")]:
             identities[(name, country)].add(identity)
     matched = set()
+    priced = []
     for area in rows:
         name = MERGE_OF.get(area["name"], area["name"])
         countries = group_countries[name] if name in MERGED_AREAS else area["countries"].split(";")
@@ -69,23 +63,11 @@ def inject_prices(areas_csv, prices_csv):
         keys = [key for key in keys if key in prices and len(identities[key]) == 1 and name not in PASS_NETWORKS]
         values = {prices[key] for key in keys}
         if len(values) > 1:
-            raise ValueError(f"{areas_csv}: conflicting prices for {name}")
-        area[PRICE_COLUMN] = str(next(iter(values))) if values else ""
+            raise ValueError(f"conflicting prices for {name}")
+        priced.append({**area, PRICE_COLUMN: str(next(iter(values))) if values else ""})
         matched.update(keys)
-    destination = Path(areas_csv)
-    temporary = None
-    try:
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="", dir=destination.parent,
-                                         delete=False) as target:
-            temporary = Path(target.name)
-            writer = csv.DictWriter(target, fieldnames=fields)
-            writer.writeheader()
-            writer.writerows(rows)
-        temporary.replace(destination)
-    finally:
-        if temporary is not None:
-            temporary.unlink(missing_ok=True)
     print(f"Prices: {len(matched)} matched source keys, {len(prices) - len(matched)} unmatched")
+    return priced
 
 
 def group_price(members):
@@ -172,10 +154,9 @@ def write_json(path, data):
 
 
 def build(runs_csv, areas_csv, boundary_path, out_dir, prices_csv=DEFAULT_PRICES):
-    inject_prices(areas_csv, prices_csv)
     boundary = load_boundary(boundary_path)
     run_ids_by_area, counted_by_area = read_runs(runs_csv)
-    all_areas = read_areas(areas_csv)
+    all_areas = apply_prices(read_areas(areas_csv), read_prices(prices_csv))
     summaries = [s for s in (summarise(m, counted_by_area) for m in alpine_groups(all_areas, run_ids_by_area, boundary))
                  if s["figures"]]
     ordered = sorted(summaries, key=lambda s: (s["name"], -s["figures"]["all"][0], s["countries"], s["lat"], s["lng"]))

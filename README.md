@@ -16,7 +16,7 @@ The data is rebuilt from OpenSkiData every month by GitHub Actions and published
 
 You need Python 3.12 (standard library only). Node is only needed for the JS test.
 
-Before building, keep the price data in `refs/skipasprijzen.csv`. The file must contain the columns `Skigebied`, `Land` and `skipass_price_eur`; leave `skipass_price_eur` empty when no price is available. The build injects these prices into `.cache/ski_areas.csv` automatically. It matches the ski-area name and country, and adds or replaces the `skipass_price_eur` column in the downloaded CSV. Download `ski_areas.csv` first, because downloading it again replaces the injected column.
+Before building, keep the price data in `refs/skipasprijzen.csv`. The file must contain the columns `Skigebied`, `Land` and `skipass_price_eur`; leave `skipass_price_eur` empty when no price is available. The build matches each price to a ski area by name and country.
 
 ```sh
 mkdir -p .cache
