@@ -65,9 +65,63 @@ function summaryHref() {
   return "index.html";
 }
 
-function unnamedHint(share) {
+function unnamedHint(share, textKey = "unnamedHintTitle") {
   if (!(share >= UNNAMED_HINT_SHARE)) return null;
-  return el("span", { class: "hint", title: I18N.t("unnamedHintTitle") }, I18N.t("unnamedHint", { p: I18N.pct(share) }));
+  const hint = el("span", { class: "hint" }, I18N.t("unnamedHint", { p: I18N.pct(share) }));
+  hint.append(infoButton("unnamedInfo", textKey, { p: I18N.pct(share) }));
+  return hint;
+}
+
+const INFO_GAP_PX = 6;
+const INFO_MARGIN_PX = 16;
+let infoSeq = 0;
+
+function placeInfo(wrap) {
+  const pop = wrap.querySelector(".info-pop");
+  const r = wrap.querySelector("button").getBoundingClientRect();
+  const maxLeft = document.documentElement.clientWidth - INFO_MARGIN_PX - pop.offsetWidth;
+  pop.style.top = `${r.bottom + INFO_GAP_PX}px`;
+  pop.style.left = `${Math.max(INFO_MARGIN_PX, Math.min(r.left, maxLeft))}px`;
+}
+
+function setInfo(wrap, isOpen, isPinned = false) {
+  if (isOpen) document.querySelectorAll(".info").forEach((w) => { if (w !== wrap) setInfo(w, false); });
+  wrap.querySelector("button").setAttribute("aria-expanded", isOpen);
+  wrap.querySelector(".info-pop").hidden = !isOpen;
+  wrap.classList.toggle("pinned", isPinned);
+  if (isOpen) placeInfo(wrap);
+}
+
+function infoButton(labelKey, textKey, vars) {
+  const id = `info-${++infoSeq}`;
+  const wrap = el("span", { class: "info" });
+  const button = el("button", {
+    type: "button", class: "info-btn", "aria-label": I18N.t(labelKey), "data-i18n-aria": labelKey,
+    "aria-expanded": false, "aria-controls": id, "aria-describedby": id,
+  }, "i");
+  const pop = el("span", { id, class: "info-pop", role: "tooltip", ...(vars ? {} : { "data-i18n": textKey }) }, I18N.t(textKey, vars));
+  pop.hidden = true;
+  wrap.append(button, pop);
+  const isPinned = () => wrap.classList.contains("pinned");
+  const closeUnlessPinned = () => { if (!isPinned()) setInfo(wrap, false); };
+  wrap.addEventListener("mouseenter", () => setInfo(wrap, true, isPinned()));
+  wrap.addEventListener("mouseleave", () => { if (document.activeElement !== button) closeUnlessPinned(); });
+  button.addEventListener("focus", () => setInfo(wrap, true, isPinned()));
+  button.addEventListener("blur", () => { if (!wrap.matches(":hover")) closeUnlessPinned(); });
+  button.addEventListener("click", () => setInfo(wrap, !isPinned(), !isPinned()));
+  return wrap;
+}
+
+const openInfos = () => [...document.querySelectorAll(".info-btn[aria-expanded='true']")].map((b) => b.closest(".info"));
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") openInfos().forEach((w) => setInfo(w, false)); });
+document.addEventListener("click", (e) => openInfos().forEach((w) => { if (!w.contains(e.target)) setInfo(w, false); }));
+addEventListener("scroll", () => openInfos().forEach(placeInfo), { capture: true, passive: true });
+addEventListener("resize", () => openInfos().forEach(placeInfo));
+
+function headingWithInfo(titleKey, labelKey, textKey) {
+  const row = el("div", { class: "heading-row" });
+  row.append(el("h2", {}, I18N.t(titleKey)), infoButton(labelKey, textKey));
+  return row;
 }
 
 let builtOn = null;

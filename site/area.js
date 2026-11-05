@@ -64,9 +64,8 @@ function renderHeader({ all }) {
     partOf.append(link(`area.html#${related.parent.slug}`, related.parent.name));
     header.append(partOf);
   }
-  if (area.unnamed_share >= UNNAMED_HINT_SHARE) {
-    header.append(el("p", { class: "note" }, I18N.t("qualityLine", { p: I18N.pct(area.unnamed_share) })));
-  }
+  const quality = unnamedHint(area.unnamed_share, "qualityLine");
+  if (quality) header.append(quality);
   header.append(links);
   return header;
 }
@@ -102,13 +101,14 @@ function renderBreakdown({ named, unnamed }) {
 
 function renderRose() {
   const src = `https://openskistats.org/ski-areas/roses-openskimap/${encodeURIComponent(area.id)}.svg`;
-  const img = el("img", { src, alt: I18N.t("roseAlt", { name: area.name }), loading: "lazy", width: 360, height: 360 });
+  const img = el("img", { src, alt: I18N.t("roseAlt", { name: area.name }), loading: "lazy", width: 300, height: 300 });
   const links = { ost: link("https://openskistats.org", "OpenSkiStats"), cc: link("https://creativecommons.org/licenses/by/4.0/", "CC BY 4.0") };
   const caption = el("figcaption", { class: "note" });
   caption.append(...I18N.t("roseCredit").split(/\{(\w+)\}/).map((part, i) => (i % 2 ? links[part] : part)));
   const figure = el("figure", { class: "rose" });
   figure.append(img, caption);
-  const s = section("roseTitle", el("p", { class: "note" }, I18N.t("roseNote")), figure);
+  const s = el("section");
+  s.append(headingWithInfo("roseTitle", "roseInfo", "roseNote"), figure);
   if (loadedRoses.has(src)) return s;
   s.classList.add("rose-pending");
   img.addEventListener("load", () => { loadedRoses.add(src); s.classList.remove("rose-pending"); });
@@ -245,9 +245,9 @@ function renderTable({ named, all }) {
   table.append(thead, body);
   const box = el("div", { class: "table-box" });
   box.append(table);
-  const s = section("tableTitle", renderFilters(all, "filterTableLabel", "table"), box,
-    ...(slice.total > PAGE_SIZE ? [renderPager(slice)] : []), el("p", { class: "note" }, I18N.t("tableNote")));
-  s.id = "pistes";
+  const s = el("section", { id: "pistes" });
+  s.append(headingWithInfo("tableTitle", "tableInfo", "tableNote"), renderFilters(all, "filterTableLabel", "table"), box,
+    ...(slice.total > PAGE_SIZE ? [renderPager(slice)] : []));
   return s;
 }
 
@@ -271,7 +271,11 @@ function renderChartSection(all) {
   const chartBox = el("div", { class: "chart-box" });
   chartBox.append(svg);
   renderChart(svg, bars, all.all, focusRow, shown.length - bars.length);
-  return section("chartTitle", el("p", { class: "note" }, I18N.t("chartNote")), renderHideShort(), chartBox);
+  const controls = el("div", { class: "chart-controls" });
+  controls.append(renderFilters(all.all, "filterLabel", "chart"), renderHideShort());
+  const s = el("section");
+  s.append(headingWithInfo("chartTitle", "chartInfo", "chartNote"), controls, chartBox);
+  return s;
 }
 
 function render() {
@@ -279,7 +283,7 @@ function render() {
   document.title = `${area.name} · ${I18N.t("siteTitle")}`;
   const all = items();
   main().replaceChildren(renderHeader(all), ...(related.children.length ? [renderChildren()] : []),
-    renderPair(all), renderFilters(all.all, "filterLabel", "chart"), renderChartSection(all), renderTable(all));
+    renderPair(all), renderChartSection(all), renderTable(all));
 }
 
 function renderNotFound() {

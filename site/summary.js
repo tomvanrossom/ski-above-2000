@@ -84,7 +84,7 @@ function renderHead() {
   const sub = el("tr");
   const favTh = el("th", { class: "c-fav", scope: "col", title: I18N.t("colFav") });
   favTh.append(el("span", { "aria-hidden": "true" }, "★"), el("span", { class: "visually-hidden" }, I18N.t("colFav")));
-  const compareTh = el("th", { class: "c-cmp", scope: "col" }, I18N.t("colCompare"));
+  const compareTh = el("th", { class: "c-cmp", scope: "col", title: I18N.t("compareLimit") }, I18N.t("colCompare"));
   const areaTh = el("th", { class: "c-name" });
   areaTh.append(sortButton("name", I18N.t("colArea"), false));
   const countryTh = el("th", { class: "left" });
@@ -248,8 +248,17 @@ function renderSelection(list) {
   document.getElementById("selection")
     .replaceChildren(...[...selected].map((s) => selectionChip(bySlug.get(s), shown.has(s))));
   document.getElementById("selection-clear").hidden = isEmpty;
-  document.getElementById("compare-help").classList.toggle("visually-hidden", !isEmpty);
+  document.getElementById("compare-help").classList.toggle("visually-hidden", selected.size >= 2);
+  document.getElementById("compare-bar").classList.toggle("is-open", !isEmpty);
+  padForCompareBar();
 }
+
+function padForCompareBar() {
+  const bar = document.getElementById("compare-bar");
+  document.body.style.paddingBottom = bar.classList.contains("is-open") ? `${bar.offsetHeight}px` : "";
+}
+
+new ResizeObserver(padForCompareBar).observe(document.getElementById("compare-bar"));
 
 const hasActiveFilter = () =>
   state.q.trim() !== "" || state.countries.length > 0 || state.min > 0 || state.maxPrice > 0 || state.fav;
@@ -347,6 +356,7 @@ function isValidArea(a) {
     Array.isArray(a.regions) && a.figures && typeof a.figures === "object";
 }
 
+document.getElementById("count-line").append(infoButton("methodInfo", "method"));
 initPage(() => { renderCountryOptions(); render(); });
 addEventListener("pageshow", (e) => { if (e.persisted) render(); });
 addEventListener("storage", render);
