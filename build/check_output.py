@@ -40,6 +40,17 @@ def check_summary(areas):
     return errors
 
 
+def check_links(areas):
+    by_slug = {a.get("slug"): a for a in areas}
+    errors = []
+    for a in areas:
+        if "parent" in a and a["slug"] not in by_slug.get(a["parent"], {}).get("villages", []):
+            errors.append(f"{a['slug']}: parent {a['parent']} missing or does not list it")
+        errors += [f"{a['slug']}: village {v} missing or has another parent"
+                   for v in a.get("villages", []) if by_slug.get(v, {}).get("parent") != a["slug"]]
+    return errors
+
+
 def check_area_file(path):
     try:
         area = json.loads(path.read_text(encoding="utf-8"))
@@ -58,9 +69,10 @@ def check(out_dir):
         meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
     except (OSError, ValueError) as e:
         return [f"summary or meta unreadable: {e}"]
-    errors = check_summary(areas)
-    if meta.get("areas") != len(areas):
-        errors.append(f"meta.json says {meta.get('areas')} areas, areas.json has {len(areas)}")
+    top_level = [a for a in areas if "parent" not in a]
+    errors = check_summary(top_level) + check_links(areas)
+    if meta.get("areas") != len(top_level):
+        errors.append(f"meta.json says {meta.get('areas')} areas, areas.json has {len(top_level)}")
     files = {p.stem for p in (out / "areas").glob("*.json")}
     errors += [f"detail file missing for {a['slug']}" for a in areas if a["slug"] not in files]
     for path in sorted((out / "areas").glob("*.json")):

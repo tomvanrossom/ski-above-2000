@@ -38,9 +38,22 @@ def sub_area_ids(run_ids_by_area):
     return parent_of
 
 
+def top_parent(area_id, parent_of):
+    seen = {area_id}
+    while parent_of.get(area_id) not in (None, *seen):
+        area_id = parent_of[area_id]
+        seen.add(area_id)
+    return area_id
+
+
 def slugify(name):
     ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
     return re.sub(r"[^a-z0-9]+", "-", ascii_name.lower()).strip("-") or "area"
+
+
+def name_key(name):
+    """Word order and punctuation don't matter: "A+C+B" and "A B C" are one name."""
+    return tuple(sorted(slugify(name).split("-")))
 
 
 def country_code(country):

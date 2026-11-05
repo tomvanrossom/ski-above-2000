@@ -9,7 +9,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from alps import contains, load_boundary  # noqa: E402
-from areas import MERGED_AREAS, MERGE_OF, PASS_NETWORKS, assign_slugs, sub_area_ids  # noqa: E402
+from areas import (MERGED_AREAS, MERGE_OF, PASS_NETWORKS, assign_slugs, name_key, sub_area_ids,  # noqa: E402
+                   top_parent)
 from pistes import (figures, group_unnamed, merge_segments, read_piste_rows, to_float, to_run,  # noqa: E402
                     unnamed_segments, unnamed_share)
 
@@ -107,6 +108,7 @@ def rounded(item, keys):
 
 
 SUMMARY_KEYS = ("slug", "name", "countries", "regions", "lat", "lng", "id", "figures", "unnamed_share", PRICE_COLUMN)
+LINK_KEYS = ("parent", "villages")
 PISTE_KEYS = ("name", "ref", "difficulty", "length_m", "start_m", "end_m", "lat", "lng", "id", "segments")
 
 
@@ -132,20 +134,41 @@ def summarise(members, counted_by_area):
     }
 
 
+def order_key(summary):
+    return summary["name"], -summary["figures"]["all"][0], summary["countries"], summary["lat"], summary["lng"]
+
+
 def has_point(area):
     return to_float(area["lat"]) is not None and to_float(area["lng"]) is not None
 
 
 def alpine_groups(all_areas, run_ids_by_area, boundary):
+    """[(members, village candidate rows)] per linked Alpine area."""
     network_ids = {a["id"] for a in all_areas if a["name"] in PASS_NETWORKS}
     subs = sub_area_ids({k: v for k, v in run_ids_by_area.items() if k not in network_ids})
     candidates = [a for a in all_areas if a["has_downhill"] == "yes" and a["name"] and has_point(a)
-                  and a["id"] not in network_ids and a["id"] not in subs]
+                  and a["id"] not in network_ids]
     groups = defaultdict(list)
+    subs_by_top = defaultdict(list)
     for a in candidates:
-        groups[MERGE_OF.get(a["name"], a["id"])].append(a)
-    return [members for members in groups.values()
+        if a["id"] in subs:
+            subs_by_top[top_parent(a["id"], subs)].append(a)
+        else:
+            groups[MERGE_OF.get(a["name"], a["id"])].append(a)
+    return [(members, [s for m in members for s in subs_by_top[m["id"]]] + (members if len(members) > 1 else []))
+            for members in groups.values()
             if any(contains(boundary, float(m["lng"]), float(m["lat"])) for m in members)]
+
+
+def villages(parent_name, candidates, counted_by_area):
+    by_name = defaultdict(list)
+    for c in candidates:
+        if name_key(c["name"]) != name_key(parent_name):
+            by_name[name_key(c["name"])].append(c)
+    found = [{**summarise(members, counted_by_area), "name": members[0]["name"], PRICE_COLUMN: None}
+             for members in by_name.values()]
+    found = [v for v in found if v["figures"]]
+    return found if len(found) >= 2 else []
 
 
 def write_json(path, data):
@@ -157,21 +180,29 @@ def build(runs_csv, areas_csv, boundary_path, out_dir, prices_csv=DEFAULT_PRICES
     boundary = load_boundary(boundary_path)
     run_ids_by_area, counted_by_area = read_runs(runs_csv)
     all_areas = apply_prices(read_areas(areas_csv), read_prices(prices_csv))
-    summaries = [s for s in (summarise(m, counted_by_area) for m in alpine_groups(all_areas, run_ids_by_area, boundary))
-                 if s["figures"]]
-    ordered = sorted(summaries, key=lambda s: (s["name"], -s["figures"]["all"][0], s["countries"], s["lat"], s["lng"]))
-    slugs = assign_slugs([(i, s["name"], s["countries"]) for i, s in enumerate(ordered)])
-    areas = [{"slug": slugs[i], **s} for i, s in enumerate(ordered)]
+    groups = [(summarise(m, counted_by_area), c) for m, c in alpine_groups(all_areas, run_ids_by_area, boundary)]
+    ordered = sorted(((s, c) for s, c in groups if s["figures"]), key=lambda g: order_key(g[0]))
+    found = sorted(((v, i) for i, (s, c) in enumerate(ordered) for v in villages(s["name"], c, counted_by_area)),
+                   key=lambda vi: order_key(vi[0]))
+    slugs = assign_slugs([(("area", i), s["name"], s["countries"]) for i, (s, _) in enumerate(ordered)] +
+                         [(("village", j), v["name"], v["countries"]) for j, (v, _) in enumerate(found)])
+    village_slugs = defaultdict(list)
+    for j, (_, i) in enumerate(found):
+        village_slugs[i].append(slugs[("village", j)])
+    areas = [{"slug": slugs[("area", i)], **s, **({"villages": village_slugs[i]} if village_slugs[i] else {})}
+             for i, (s, _) in enumerate(ordered)]
+    village_areas = [{"slug": slugs[("village", j)], **v, "parent": areas[i]["slug"]} for j, (v, i) in enumerate(found)]
 
     out = Path(out_dir)
     if (out / "areas").exists():
         shutil.rmtree(out / "areas")
     (out / "areas").mkdir(parents=True)
-    for a in areas:
+    for a in areas + village_areas:
         write_json(out / "areas" / f"{a['slug']}.json", a)
-    write_json(out / "areas.json", [{k: a[k] for k in SUMMARY_KEYS} for a in areas])
+    write_json(out / "areas.json", [{k: a[k] for k in (*SUMMARY_KEYS, *LINK_KEYS) if k in a}
+                                    for a in areas + village_areas])
     write_json(out / "meta.json", {"built": datetime.date.today().isoformat(), "areas": len(areas)})
-    return areas
+    return areas, village_areas
 
 
 def main():
@@ -182,8 +213,8 @@ def main():
     parser.add_argument("--boundary", default=str(Path(__file__).parent.parent / "alps" / "alpine-convention.geojson"))
     parser.add_argument("--out", default=str(Path(__file__).parent.parent / "site" / "data"))
     args = parser.parse_args()
-    areas = build(args.runs, args.areas, args.boundary, args.out, args.prices)
-    print(len(areas), "Alpine ski areas written to", args.out)
+    areas, village_areas = build(args.runs, args.areas, args.boundary, args.out, args.prices)
+    print(len(areas), "Alpine ski areas and", len(village_areas), "villages written to", args.out)
 
 
 if __name__ == "__main__":

@@ -2,14 +2,15 @@ import io
 import sys
 import tempfile
 import unittest
+from collections import defaultdict
 from contextlib import redirect_stdout
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from alps import contains, in_polygon  # noqa: E402
-from areas import assign_slugs, slugify, sub_area_ids  # noqa: E402
-from build import PRICE_COLUMN, apply_prices, read_prices  # noqa: E402
-from check_output import REQUIRED_AREAS, check_summary  # noqa: E402
+from areas import assign_slugs, slugify, sub_area_ids, top_parent  # noqa: E402
+from build import PRICE_COLUMN, alpine_groups, apply_prices, read_prices, villages  # noqa: E402
+from check_output import REQUIRED_AREAS, check_links, check_summary  # noqa: E402
 from pistes import figures, group_unnamed, merge_segments, to_run, unnamed_segments, unnamed_share  # noqa: E402
 
 
@@ -91,6 +92,13 @@ class OutputCheck(unittest.TestCase):
         errors = check_summary(areas)
         self.assertIn("required area missing or empty: Alta Badia", errors)
         self.assertTrue(any("Broken" in e and "negative" in e for e in errors))
+
+    def test_parent_and_village_links_must_resolve_both_ways(self):
+        areas = [{"slug": "p", "villages": ["v", "ghost"]}, {"slug": "v", "parent": "p"},
+                 {"slug": "orphan", "parent": "nobody"}]
+        self.assertEqual(check_links(areas), ["p: village ghost missing or has another parent",
+                                              "orphan: parent nobody missing or does not list it"])
+        self.assertEqual(check_links([{"slug": "p", "villages": ["v"]}, {"slug": "v", "parent": "p"}]), [])
 
     def test_too_few_areas_and_implausible_trois_vallees(self):
         errors = check_summary([summary("Les Trois Vallées", 90)])
@@ -183,6 +191,74 @@ class SubAreas(unittest.TestCase):
                    "trois-vallees": set(range(1, 40)),
                    "neighbour": {9, 10, 50, 51}}
         self.assertEqual(sub_area_ids(run_ids), {"val-thorens": "trois-vallees"})
+
+    def test_top_parent_follows_the_chain_and_stops_on_a_cycle(self):
+        self.assertEqual(top_parent("leaf", {"leaf": "mid", "mid": "top"}), "top")
+        self.assertEqual(top_parent("solo", {}), "solo")
+        self.assertIn(top_parent("a", {"a": "b", "b": "a"}), {"a", "b"})
+
+
+def ski_area(name, area_id, downhill="yes", lat="5", lng="5"):
+    return {"name": name, "id": area_id, "has_downhill": downhill, "lat": lat, "lng": lng,
+            "countries": "France", "regions": "Savoie", PRICE_COLUMN: ""}
+
+
+def counted(*area_ids):
+    return defaultdict(dict, {a: {f"{a}-run": to_run(row(f"{a} piste", run_id=f"{a}-run"))} for a in area_ids})
+
+
+class VillageCandidates(unittest.TestCase):
+    BOUNDARY = [((0, 0, 10, 10), [PointInPolygon.SQUARE])]
+
+    def groups(self, areas, run_ids):
+        return {members[0]["name"]: [v["name"] for v in villages]
+                for members, villages in alpine_groups(areas, run_ids, self.BOUNDARY)}
+
+    def test_sub_area_of_a_sub_area_is_a_village_of_the_top_parent(self):
+        areas = [ski_area("Top", "top"), ski_area("Mid", "mid"), ski_area("Leaf", "leaf"),
+                 ski_area("Lifts only", "lifts", downhill="no"), ski_area("", "nameless"),
+                 ski_area("Nowhere", "nowhere", lat="")]
+        run_ids = {"top": set(range(1, 41)), "mid": set(range(1, 28)) | {100, 101, 102},
+                   "leaf": {100, 101, 102}, "lifts": {1, 2}, "nameless": {3, 4}, "nowhere": {5, 6}}
+        self.assertEqual(self.groups(areas, run_ids), {"Top": ["Mid", "Leaf"]})
+
+    def test_members_of_a_merged_area_are_its_villages(self):
+        areas = [ski_area("La Rosière", "a"), ski_area("La Thuile ski", "b"), ski_area("Les Rousses", "c")]
+        run_ids = {"a": {1, 2}, "b": {3, 4}, "c": {5, 6}}
+        self.assertEqual(self.groups(areas, run_ids),
+                         {"La Rosière": ["La Rosière", "La Thuile ski"], "Les Rousses": []})
+
+
+class Villages(unittest.TestCase):
+    def names(self, parent, candidates, runs):
+        return [v["name"] for v in villages(parent, candidates, runs)]
+
+    def test_villages_get_their_own_figures_and_no_price(self):
+        rows = [{**ski_area("A", "a"), PRICE_COLUMN: "300"}, ski_area("B", "b")]
+        a, b = villages("Parent", rows, counted("a", "b"))
+        self.assertEqual((a["name"], a[PRICE_COLUMN], [p["name"] for p in a["pistes"]]), ("A", None, ["a piste"]))
+        self.assertEqual(b["name"], "B")
+
+    def test_village_named_like_the_parent_is_dropped(self):
+        rows = [ski_area("Parent", "p"), ski_area("A", "a"), ski_area("B", "b")]
+        self.assertEqual(self.names("Parent", rows, counted("p", "a", "b")), ["A", "B"])
+
+    def test_names_with_the_same_words_count_as_the_same_name(self):
+        rows = [ski_area("Andermatt + Sedrun + Disentis", "a"), ski_area("Andermatt+Disentis+Sedrun", "b")]
+        self.assertEqual(self.names("Andermatt Sedrun Disentis", rows, counted("a", "b")), [])
+
+    def test_villages_sharing_a_name_are_merged(self):
+        rows = [ski_area("A", "a1"), ski_area("A", "a2"), ski_area("B", "b")]
+        merged, _ = villages("Parent", rows, counted("a1", "a2", "b"))
+        self.assertEqual(sorted(p["name"] for p in merged["pistes"]), ["a1 piste", "a2 piste"])
+
+    def test_villages_without_counted_runs_are_dropped(self):
+        rows = [ski_area("A", "a"), ski_area("B", "b"), ski_area("C", "c")]
+        self.assertEqual(self.names("Parent", rows, counted("a", "c")), ["A", "C"])
+
+    def test_fewer_than_two_villages_means_none(self):
+        rows = [ski_area("A", "a"), ski_area("B", "b")]
+        self.assertEqual(self.names("Parent", rows, counted("a")), [])
 
 
 if __name__ == "__main__":

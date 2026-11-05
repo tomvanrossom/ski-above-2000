@@ -1,10 +1,15 @@
 const GROUPS = [{ key: "all" }, ...COLOURS];
 const MAX_COMPARE = CompareTargets.MAX;
 
-let areas = [];
+let areas = [];  // top-level only; villages are reached through bySlug
+let bySlug = new Map();
 let state = UrlState.parse(location.search);
 let selected = new Set();
+let expanded = new Set();
 let pendingRender = false;
+
+const villagesOf = (area) => (Array.isArray(area.villages) ? area.villages : []).map((s) => bySlug.get(s)).filter(Boolean);
+const withVillages = (list) => list.flatMap((a) => [a, ...villagesOf(a)]);
 
 const fig = (area, group, index) => area.figures[group]?.[index] ?? 0;
 const priceValue = (area) => {
@@ -23,7 +28,7 @@ function visible() {
     (!text || a.name.toLocaleLowerCase().includes(text)) &&
     fig(a, "all", 1) >= state.min &&
     (state.maxPrice === 0 || (priceValue(a) !== null && priceValue(a) <= state.maxPrice)) &&
-    (!state.fav || Favourites.has(a.slug)));
+    (!state.fav || withVillages([a]).some((v) => Favourites.has(v.slug))));
 }
 
 function compare(a, b) {
@@ -144,6 +149,26 @@ function favCell(a) {
   return td;
 }
 
+const villageRowId = (slug) => `village-${slug}`;
+
+function villageToggle(a, children) {
+  const isOpen = expanded.has(a.slug);
+  const button = el("button", {
+    type: "button", class: "village-toggle", "aria-expanded": isOpen,
+    "aria-controls": children.map((v) => villageRowId(v.slug)).join(" "),
+  });
+  button.append(el("span", { "aria-hidden": "true" }, isOpen ? "▾ " : "▸ "),
+    I18N.t(isOpen ? "hideVillages" : "showVillages", { n: children.length }), el("span", { class: "visually-hidden" }, `: ${a.name}`));
+  button.addEventListener("click", () => {
+    const next = new Set(expanded);
+    if (isOpen) next.delete(a.slug); else next.add(a.slug);
+    expanded = next;
+    render();
+    document.querySelector(`[aria-controls="${button.getAttribute("aria-controls")}"]`)?.focus();
+  });
+  return button;
+}
+
 function areaCell(a) {
   const td = el("td", { class: "c-name" });
   const meta = el("div", { class: "area-meta" });
@@ -152,30 +177,39 @@ function areaCell(a) {
   td.append(el("a", { href: `area.html#${a.slug}`, class: "name" }, a.name), meta);
   const hint = unnamedHint(a.unnamed_share);
   if (hint) td.append(hint);
+  const children = villagesOf(a);
+  if (children.length) td.append(villageToggle(a, children));
   return td;
+}
+
+function areaRow(a, maxTotal, attrs = {}) {
+  const tr = el("tr", attrs);
+  tr.append(favCell(a), compareCell(a), areaCell(a), el("td", { class: "country" }, a.countries.map(I18N.country).join(" · ")), priceCell(a));
+  GROUPS.forEach((g) => {
+    const total = kmCell(fig(a, g.key, 0), "start");
+    if (g.key === "all") total.append(shareBar(fig(a, "all", 0), fig(a, "all", 1), maxTotal));
+    tr.append(total, kmCell(fig(a, g.key, 1)));
+  });
+  return tr;
 }
 
 function renderRows(list) {
   const maxTotal = Math.max(...list.map((a) => fig(a, "all", 0)), 1);
-  const rows = [...list].sort(compare).map((a) => {
-    const tr = el("tr");
-    tr.append(favCell(a), compareCell(a), areaCell(a), el("td", { class: "country" }, a.countries.map(I18N.country).join(" · ")), priceCell(a));
-    GROUPS.forEach((g) => {
-      const total = kmCell(fig(a, g.key, 0), "start");
-      if (g.key === "all") total.append(shareBar(fig(a, "all", 0), fig(a, "all", 1), maxTotal));
-      tr.append(total, kmCell(fig(a, g.key, 1)));
-    });
-    return tr;
-  });
+  const rows = [...list].sort(compare).flatMap((a) => [areaRow(a, maxTotal),
+    ...villagesOf(a).sort(compare).map((v) => {
+      const tr = areaRow(v, maxTotal, { id: villageRowId(v.slug), class: "village" });
+      tr.hidden = !expanded.has(a.slug);
+      return tr;
+    })]);
   document.getElementById("rows").replaceChildren(...rows);
 }
 
 function compareTargets() {
   return CompareTargets.targets({
     selected: [...selected],
-    visible: visible().map((a) => a.slug),
+    visible: withVillages(visible()).map((a) => a.slug),
     favourites: Favourites.list(),
-    known: areas.map((a) => a.slug),
+    known: [...bySlug.keys()],
   });
 }
 
@@ -206,7 +240,7 @@ function renderControls() {
 
 function render() {
   const list = visible();
-  selected = new Set(CompareTargets.visibleSelection([...selected], list.map((a) => a.slug)));
+  selected = new Set(CompareTargets.visibleSelection([...selected], withVillages(list).map((a) => a.slug)));
   renderControls();
   renderHead();
   renderRows(list);
@@ -268,7 +302,9 @@ addEventListener("storage", render);
 fetchJSON("data/areas.json")
   .then((data) => {
     if (!Array.isArray(data)) throw new Error("areas.json is not a list");
-    areas = data.filter(isValidArea);
+    const valid = data.filter(isValidArea);
+    bySlug = new Map(valid.map((a) => [a.slug, a]));
+    areas = valid.filter((a) => !a.parent);
     const countries = renderCountryOptions();
     const maxHigh = Math.ceil(Math.max(0, ...areas.map((a) => fig(a, "all", 1))));
     const prices = areas.map(priceValue).filter((price) => price !== null);

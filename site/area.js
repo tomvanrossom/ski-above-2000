@@ -9,6 +9,7 @@ const COLUMNS = [
 const DIFF_ORDER = Object.fromEntries(COLOURS.map((c, i) => [c.key, i]));
 
 let area = null;
+let related = { parent: null, villages: [] };
 let active = new Set(COLOURS.map((c) => c.key));
 let sort = { key: "start_m", dir: -1 };
 
@@ -46,6 +47,11 @@ function renderHeader({ all }) {
   links.append(link(osmUrl(area.id, area.lat, area.lng, 13), I18N.t("openOnMap")));
   header.append(el("div", { class: "eyebrow" }, [...area.regions, ...area.countries.map(I18N.country)].join(" · ")),
     title, stats);
+  if (related.parent) {
+    const partOf = el("p", { class: "header-links" }, `${I18N.t("partOf")} `);
+    partOf.append(link(`area.html#${related.parent.slug}`, related.parent.name));
+    header.append(partOf);
+  }
   if (area.unnamed_share >= UNNAMED_HINT_SHARE) {
     header.append(el("p", { class: "note" }, I18N.t("qualityLine", { p: I18N.pct(area.unnamed_share) })));
   }
@@ -80,6 +86,16 @@ function renderBreakdown({ named, unnamed }) {
   const box = el("div", { class: "table-box breakdown-box" });
   box.append(table);
   return section("byDifficulty", box);
+}
+
+function renderVillages() {
+  const list = el("ul", { class: "villages" });
+  list.append(...related.villages.map((v) => {
+    const li = el("li");
+    li.append(link(`area.html#${v.slug}`, v.name));
+    return li;
+  }));
+  return section("villagesTitle", list);
 }
 
 function renderFilters(all) {
@@ -171,7 +187,8 @@ function render() {
   const chartBox = el("div", { class: "chart-box" });
   chartBox.append(svg);
   renderChart(svg, all.all.filter((p) => active.has(p.difficulty)), all.all, focusRow);
-  main().replaceChildren(renderHeader(all), renderBreakdown(all), renderFilters(all.all),
+  main().replaceChildren(renderHeader(all), ...(related.villages.length ? [renderVillages()] : []),
+    renderBreakdown(all), renderFilters(all.all),
     section("chartTitle", el("p", { class: "note" }, I18N.t("chartNote")), chartBox), renderTable(all.named));
 }
 
@@ -190,8 +207,25 @@ function isValidArea(a) {
     a.pistes.length + a.unnamed.length > 0;
 }
 
+async function loadRelated(data) {
+  const none = { parent: null, villages: [] };
+  if (!data.parent && !Array.isArray(data.villages)) return none;
+  try {
+    const all = await fetchJSON("data/areas.json");
+    const bySlug = new Map(all.filter((a) => a && SLUG_RE.test(a.slug) && typeof a.name === "string").map((a) => [a.slug, a]));
+    return {
+      parent: bySlug.get(data.parent) ?? null,
+      villages: (data.villages ?? []).map((s) => bySlug.get(s)).filter(Boolean),
+    };
+  } catch (e) {
+    console.warn("Parent and villages unavailable:", e);
+    return none;
+  }
+}
+
 async function load() {
   area = null;
+  related = { parent: null, villages: [] };
   const slug = decodeURIComponent(location.hash.slice(1));
   if (!SLUG_RE.test(slug)) return renderNotFound();
   try {
@@ -200,6 +234,7 @@ async function load() {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     if (!isValidArea(data)) throw new Error("unexpected area data");
+    related = await loadRelated(data);
     area = data;
     render();
   } catch (e) {

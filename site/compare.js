@@ -13,7 +13,6 @@ const pieces = (a) => [...a.pistes, ...a.unnamed];
 
 const KM = { format: (n) => I18N.km(n), digits: 1 };
 const PCT = { format: (n) => I18N.pct(n), digits: 2 };
-const COUNT = { format: (n) => I18N.num(n), digits: 0 };
 const METRES = { format: (n) => I18N.m(n), digits: 0 };
 const PRICE = { format: (n) => n === null ? "–" : `€ ${I18N.num(n)}`, digits: 0 };
 const highShare = (a) => (fig(a, "all", 0) ? fig(a, "all", 1) / fig(a, "all", 0) : 0);
@@ -33,8 +32,6 @@ function rows() {
       kmRow(I18N.t("rowColourTotal", { colour: I18N.t(c.key) }), c.key, 0, c),
       kmRow(I18N.t("rowColourHigh", { colour: I18N.t(c.key) }), c.key, 1, c),
     ]),
-    { label: I18N.t("rowNamed"), ...COUNT, best: true, raw: (a) => a.pistes.length },
-    { label: I18N.t("rowUnnamed"), ...COUNT, raw: (a) => a.unnamed.length },
     { label: I18N.t("rowTop"), ...METRES, best: true, raw: (a) => Math.max(...pieces(a).map((p) => p.start_m)) },
     { label: I18N.t("rowBottom"), ...METRES, raw: (a) => Math.min(...pieces(a).map((p) => p.end_m)) },
     { label: I18N.t("rowQuality"), ...PCT, raw: (a) => a.unnamed_share },
