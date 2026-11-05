@@ -1,4 +1,3 @@
 .cache/
 site/data/
-*.csv
 __pycache__/

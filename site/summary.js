@@ -44,7 +44,7 @@ function sortButton(key, label, isNumeric = true) {
 
 function renderHead() {
   const top = el("tr");
-  top.append(el("th", { class: "c-fav" }), el("th", { class: "c-cmp" }), el("th", { class: "c-name" }), el("th"));
+  top.append(el("th", { class: "c-fav" }), el("th", { class: "c-cmp" }), el("th", { class: "c-name" }), el("th"), el("th"));
   GROUPS.forEach((g) => {
     const th = el("th", { class: "group start", colspan: 2, scope: "colgroup" });
     const span = el("span");
@@ -61,7 +61,8 @@ function renderHead() {
   areaTh.append(sortButton("name", I18N.t("colArea"), false));
   const countryTh = el("th", { class: "left" });
   countryTh.append(sortButton("country", I18N.t("colCountry"), false));
-  sub.append(favTh, compareTh, areaTh, countryTh);
+  const priceTh = el("th", {}, I18N.t("colPrice"));
+  sub.append(favTh, compareTh, areaTh, countryTh, priceTh);
   GROUPS.forEach((g) => {
     const total = el("th", { class: "start" });
     total.append(sortButton(`${g.key}-total`, I18N.t("colTotal")));
@@ -75,6 +76,11 @@ function renderHead() {
 function kmCell(value, extraClass = "") {
   const cls = [extraClass, value === 0 ? "zero" : ""].filter(Boolean).join(" ");
   return el("td", cls ? { class: cls } : {}, value === 0 ? "–" : I18N.km(value));
+}
+
+function priceCell(area) {
+  const price = area.skipass_price_eur;
+  return el("td", {}, price == null ? "–" : `€ ${I18N.num(price)}`);
 }
 
 function shareBar(total, high, maxTotal) {
@@ -119,7 +125,7 @@ function renderRows(list) {
   const maxTotal = Math.max(...list.map((a) => fig(a, "all", 0)), 1);
   const rows = [...list].sort(compare).map((a) => {
     const tr = el("tr");
-    tr.append(favCell(a), compareCell(a), areaCell(a), el("td", { class: "country" }, a.countries.map(I18N.country).join(" · ")));
+    tr.append(favCell(a), compareCell(a), areaCell(a), el("td", { class: "country" }, a.countries.map(I18N.country).join(" · ")), priceCell(a));
     GROUPS.forEach((g) => {
       const total = kmCell(fig(a, g.key, 0), "start");
       if (g.key === "all") total.append(shareBar(fig(a, "all", 0), fig(a, "all", 1), maxTotal));
