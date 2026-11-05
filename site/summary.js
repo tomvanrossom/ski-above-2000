@@ -10,7 +10,7 @@ let pendingRender = false;
 const fig = (area, group, index) => area.figures[group]?.[index] ?? 0;
 const priceValue = (area) => {
   const price = Number(area.skipass_price_eur);
-  return Number.isFinite(price) ? price : null;
+  return Number.isFinite(price) && price > 0 ? price : null;
 };
 const sortValue = (area, key) => {
   const [group, kind] = key.split("-");

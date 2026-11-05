@@ -79,6 +79,7 @@ const I18N = (() => {
       barAria: "{name}, {top} to {bot} metres",
       compareTitle: "Compare ski areas",
       compareEmpty: "Nothing to compare yet. Star some favourites or select 2 to 4 ski areas on the summary page.",
+      rowPrice: "6-day pass",
       rowTotal: "Total length",
       rowHigh: "Fully above 2,000 m",
       rowPctHigh: "Share above 2,000 m",
@@ -92,6 +93,7 @@ const I18N = (() => {
       detailPage: "Detail page",
       compareMissing: "Not found: {slugs}",
       best: "best",
+      cheapest: "cheapest",
     },
     nl: {
       siteTitle: "Skigebieden boven 2.000 m",
@@ -171,6 +173,7 @@ const I18N = (() => {
       barAria: "{name}, {top} tot {bot} meter",
       compareTitle: "Skigebieden vergelijken",
       compareEmpty: "Nog niets te vergelijken. Markeer favorieten of selecteer 2 tot 4 skigebieden op de overzichtspagina.",
+      rowPrice: "6-daagse skipas",
       rowTotal: "Totale lengte",
       rowHigh: "Volledig boven 2.000 m",
       rowPctHigh: "Aandeel boven 2.000 m",
@@ -184,6 +187,7 @@ const I18N = (() => {
       detailPage: "Detailpagina",
       compareMissing: "Niet gevonden: {slugs}",
       best: "beste",
+      cheapest: "goedkoopste",
     },
   };
   const COUNTRIES_NL = {
