@@ -4,6 +4,8 @@ const MAX_COMPARE = CompareTargets.MAX;
 let areas = [];
 let state = UrlState.parse(location.search);
 let selected = new Set();
+let maxPriceLimit = 0;
+let pendingRender = false;
 
 const fig = (area, group, index) => area.figures[group]?.[index] ?? 0;
 const priceValue = (area) => {
@@ -21,6 +23,7 @@ function visible() {
     (state.countries.length === 0 || a.countries.some((c) => state.countries.includes(c))) &&
     (!text || a.name.toLocaleLowerCase().includes(text)) &&
     fig(a, "all", 1) >= state.min &&
+    (state.maxPrice === 0 || (priceValue(a) !== null && priceValue(a) <= state.maxPrice)) &&
     (!state.fav || Favourites.has(a.slug)));
 }
 
@@ -39,11 +42,20 @@ function compare(a, b) {
   return (sortValue(a, state.sort) - sortValue(b, state.sort)) * state.dir || collator.compare(a.name, b.name);
 }
 
-function setState(changes) {
+function setState(changes, renderNow = true) {
   state = { ...state, ...changes };
   history.replaceState(null, "", location.pathname + UrlState.serialize(state));
   rememberSummaryUrl();
-  render();
+  if (renderNow) render();
+}
+
+function scheduleRender() {
+  if (pendingRender) return;
+  pendingRender = true;
+  requestAnimationFrame(() => {
+    pendingRender = false;
+    render();
+  });
 }
 
 function sortButton(key, label, isNumeric = true) {
@@ -179,6 +191,10 @@ function renderControls() {
   const slider = document.getElementById("min");
   slider.value = state.min;
   document.getElementById("min-label").textContent = I18N.t("minKm", { n: I18N.num(state.min) });
+  const priceSlider = document.getElementById("max-price");
+  const displayedMaxPrice = state.maxPrice || maxPriceLimit;
+  priceSlider.value = displayedMaxPrice;
+  document.getElementById("max-price-label").textContent = I18N.t("maxPrice", { n: `€ ${I18N.num(displayedMaxPrice)}` });
   document.getElementById("fav").checked = state.fav;
   const search = document.getElementById("search");
   if (search.value !== state.q) search.value = state.q;
@@ -213,11 +229,22 @@ function renderCountryOptions() {
   return countries;
 }
 
-function wireControls(maxHigh) {
+function wireControls(maxHigh, maxPrice) {
   const slider = document.getElementById("min");
   slider.max = maxHigh;
   slider.step = maxHigh > 100 ? 5 : 1;
-  slider.addEventListener("input", () => setState({ min: Number(slider.value) }));
+  slider.addEventListener("input", () => {
+    setState({ min: Number(slider.value) }, false);
+    scheduleRender();
+  });
+  maxPriceLimit = maxPrice;
+  const priceSlider = document.getElementById("max-price");
+  priceSlider.max = maxPrice;
+  priceSlider.step = maxPrice > 100 ? 5 : 1;
+  priceSlider.addEventListener("input", () => {
+    setState({ maxPrice: Number(priceSlider.value) }, false);
+    scheduleRender();
+  });
   document.getElementById("search").addEventListener("input", (e) => setState({ q: e.target.value }));
   document.getElementById("fav").addEventListener("change", (e) => setState({ fav: e.target.checked }));
   document.getElementById("country-clear").addEventListener("click", () => setState({ countries: [] }));
@@ -244,8 +271,14 @@ fetchJSON("data/areas.json")
     areas = data.filter(isValidArea);
     const countries = renderCountryOptions();
     const maxHigh = Math.ceil(Math.max(0, ...areas.map((a) => fig(a, "all", 1))));
-    wireControls(maxHigh);
-    setState({ countries: state.countries.filter((c) => countries.includes(c)), min: Math.min(state.min, maxHigh) });
+    const prices = areas.map(priceValue).filter((price) => price !== null);
+    const maxPrice = Math.ceil(Math.max(0, ...prices));
+    wireControls(maxHigh, maxPrice);
+    setState({
+      countries: state.countries.filter((c) => countries.includes(c)),
+      min: Math.min(state.min, maxHigh),
+      maxPrice: state.maxPrice > 0 ? Math.min(state.maxPrice, maxPrice) : 0,
+    });
   })
   .catch((e) => {
     console.error(e);
