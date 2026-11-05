@@ -7,11 +7,13 @@ const COLUMNS = [
   { key: "drop_m", label: "colDrop", num: true },
 ];
 const DIFF_ORDER = Object.fromEntries(COLOURS.map((c, i) => [c.key, i]));
+const PAGE_SIZE = 10;
 
 let area = null;
 let related = { parent: null, children: [] };
 let active = new Set(COLOURS.map((c) => c.key));
 let sort = { key: "start_m", dir: -1 };
+let page = 1;
 const loadedRoses = new Set();
 
 const main = () => document.getElementById("main");
@@ -114,6 +116,12 @@ function renderRose() {
 
 const hasRose = () => typeof area.id === "string" && area.id !== "" && area.kind !== "municipality";
 
+function renderPair(all) {
+  const pair = el("div", { class: "pair" });
+  pair.append(renderBreakdown(all), ...(hasRose() ? [renderRose()] : []));
+  return pair;
+}
+
 function renderChildren() {
   const list = el("ul", { class: "villages" });
   list.append(...related.children.map((v) => {
@@ -124,23 +132,35 @@ function renderChildren() {
   return section(`title${childKind(area)}`, list);
 }
 
-function renderFilters(all) {
-  const box = el("div", { class: "filters", role: "group", "aria-label": I18N.t("filterLabel") });
+function renderFilters(all, labelKey, where) {
+  const box = el("div", { class: "filters", role: "group", "aria-label": I18N.t(labelKey), "data-filter": where });
   box.append(...COLOURS.filter((c) => all.some((p) => p.difficulty === c.key)).map((c) => {
-    const b = el("button", { class: "chip", type: "button", "aria-pressed": active.has(c.key) });
+    const b = el("button", { class: "chip", type: "button", "aria-pressed": active.has(c.key), "data-key": c.key });
     b.append(swatch(c), `${I18N.t(c.key)} · ${I18N.num(all.filter((p) => p.difficulty === c.key).length)}`);
     b.addEventListener("click", () => {
       const next = new Set(active);
       if (next.has(c.key)) next.delete(c.key); else next.add(c.key);
       active = next;
+      page = 1;
       render();
+      document.querySelector(`[data-filter="${where}"] [data-key="${c.key}"]`)?.focus();
     });
     return b;
   }));
   return box;
 }
 
+const tableRows = (named) => [...named.filter((p) => active.has(p.difficulty)).sort(compare),
+  ...area.unnamed_groups.filter((g) => active.has(g.difficulty)).map((g) => ({ ...g, rowId: `g-${g.difficulty}`, isGroup: true }))];
+
+const refreshTable = () => document.getElementById("pistes")?.replaceWith(renderTable(items()));
+
 function focusRow(p) {
+  const index = tableRows(items().named).findIndex((r) => r.rowId === p.rowId);
+  if (index >= 0 && Paging.pageOf(index, PAGE_SIZE) !== page) {
+    page = Paging.pageOf(index, PAGE_SIZE);
+    refreshTable();
+  }
   const row = document.getElementById(p.rowId);
   if (!row) return;
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -180,7 +200,28 @@ function groupRow(g) {
   return tr;
 }
 
-function renderTable(named) {
+function pagerButton(key, target, isDisabled) {
+  const b = el("button", { class: "chip", type: "button", "data-pager": key }, I18N.t(key));
+  b.disabled = isDisabled;
+  b.addEventListener("click", () => {
+    page = target;
+    refreshTable();
+    const pressed = document.querySelector(`[data-pager="${key}"]`);
+    (pressed?.disabled ? document.querySelector(".pager button:not(:disabled)") : pressed)?.focus();
+  });
+  return b;
+}
+
+function renderPager({ page: current, pages, from, to, total }) {
+  const status = el("p", { class: "pager-status", "aria-live": "polite" });
+  const text = I18N.t("pageStatus", { from: I18N.num(from), to: I18N.num(to), total: I18N.num(total) });
+  requestAnimationFrame(() => { status.textContent = text; });
+  const pager = el("nav", { class: "pager", "aria-label": I18N.t("pagerLabel") });
+  pager.append(pagerButton("pagePrev", current - 1, current === 1), status, pagerButton("pageNext", current + 1, current === pages));
+  return pager;
+}
+
+function renderTable({ named, all }) {
   const head = el("tr");
   head.append(...COLUMNS.map((c) => {
     const th = el("th", c.num ? { class: "num" } : {});
@@ -188,21 +229,25 @@ function renderTable(named) {
     if (sort.key === c.key) b.setAttribute("aria-sort", sort.dir > 0 ? "ascending" : "descending");
     b.addEventListener("click", () => {
       sort = { key: c.key, dir: sort.key === c.key ? -sort.dir : (c.num ? -1 : 1) };
+      page = 1;
       render();
     });
     th.append(b);
     return th;
   }));
   const body = el("tbody");
-  body.append(...named.filter((p) => active.has(p.difficulty)).sort(compare).map(pisteRow),
-    ...area.unnamed_groups.filter((g) => active.has(g.difficulty)).map(groupRow));
+  const slice = Paging.slice(tableRows(named), page, PAGE_SIZE);
+  body.append(...slice.rows.map((r) => (r.isGroup ? groupRow(r) : pisteRow(r))));
   const thead = el("thead");
   thead.append(head);
   const table = el("table");
   table.append(thead, body);
   const box = el("div", { class: "table-box" });
   box.append(table);
-  return section("tableTitle", box, el("p", { class: "note" }, I18N.t("tableNote")));
+  const s = section("tableTitle", renderFilters(all, "filterTableLabel", "table"), box,
+    ...(slice.total > PAGE_SIZE ? [renderPager(slice)] : []), el("p", { class: "note" }, I18N.t("tableNote")));
+  s.id = "pistes";
+  return s;
 }
 
 function render() {
@@ -214,8 +259,8 @@ function render() {
   chartBox.append(svg);
   renderChart(svg, all.all.filter((p) => active.has(p.difficulty)), all.all, focusRow);
   main().replaceChildren(renderHeader(all), ...(related.children.length ? [renderChildren()] : []),
-    renderBreakdown(all), ...(hasRose() ? [renderRose()] : []), renderFilters(all.all),
-    section("chartTitle", el("p", { class: "note" }, I18N.t("chartNote")), chartBox), renderTable(all.named));
+    renderPair(all), renderFilters(all.all, "filterLabel", "chart"),
+    section("chartTitle", el("p", { class: "note" }, I18N.t("chartNote")), chartBox), renderTable(all));
 }
 
 function renderNotFound() {
@@ -252,6 +297,7 @@ async function loadRelated(data) {
 async function load() {
   area = null;
   related = { parent: null, children: [] };
+  page = 1;
   const slug = decodeURIComponent(location.hash.slice(1));
   if (!SLUG_RE.test(slug)) return renderNotFound();
   try {

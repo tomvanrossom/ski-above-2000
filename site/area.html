@@ -25,7 +25,14 @@
   .rose img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
   .rose a { color: var(--accent); }
   .rose-pending { position: absolute; visibility: hidden; pointer-events: none; }
+  .pair { display: grid; gap: 28px; align-items: start; }
+  @media (min-width: 760px) {
+    .pair:has(> section + section:not(.rose-pending)) { grid-template-columns: 1.4fr 1fr; }
+  }
   .filters { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pager { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  .pager-status { margin: 0; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .chip:disabled { opacity: .45; cursor: default; }
   .chip {
     display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px;
     border: 1px solid var(--line); background: var(--surface); color: var(--fg); font: inherit; font-size: 14px; cursor: pointer;
@@ -64,6 +71,7 @@
 <script src="common.js"></script>
 <script src="favourites.js"></script>
 <script src="price.js"></script>
+<script src="paging.js"></script>
 <script src="area-chart.js"></script>
 <script src="area.js"></script>
 </body>
