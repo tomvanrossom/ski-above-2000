@@ -15,16 +15,16 @@ const KM = { format: (n) => I18N.km(n), digits: 1 };
 const PCT = { format: (n) => I18N.pct(n), digits: 2 };
 const METRES = { format: (n) => I18N.m(n), digits: 0 };
 const PRICE = { format: (n) => n === null ? "–" : `€ ${I18N.num(n)}`, digits: 0 };
+const PRICE_KM = { format: (n) => n === null ? "–" : euroPerKm(n), digits: 2 };
 const highShare = (a) => (fig(a, "all", 0) ? fig(a, "all", 1) / fig(a, "all", 0) : 0);
-const priceValue = (a) => {
-  const price = Number(a.skipass_price_eur);
-  return Number.isFinite(price) && price > 0 ? price : null;
-};
 
 function rows() {
   const kmRow = (label, group, index, swatchOf) => ({ label, swatchOf, ...KM, best: true, raw: (a) => fig(a, group, index) });
+  const priceRow = (label, raw, format) => ({ label, ...format, best: "lowest", bestLabel: I18N.t("cheapest"), raw });
   return [
-    { label: I18N.t("rowPrice"), ...PRICE, best: "lowest", bestLabel: I18N.t("cheapest"), raw: priceValue },
+    priceRow(I18N.t("rowPrice"), Price.value, PRICE),
+    priceRow(I18N.t("rowPricePerHighKm"), Price.perHighKm, PRICE_KM),
+    priceRow(I18N.t("rowPricePerKm"), Price.perTotalKm, PRICE_KM),
     kmRow(I18N.t("rowTotal"), "all", 0),
     kmRow(I18N.t("rowHigh"), "all", 1),
     { label: I18N.t("rowPctHigh"), ...PCT, best: true, raw: highShare },

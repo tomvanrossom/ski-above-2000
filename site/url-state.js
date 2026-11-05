@@ -1,6 +1,6 @@
 const UrlState = (() => {
   const GROUPS = ["all", "novice", "easy", "intermediate", "advanced"];
-  const SORT_KEYS = ["name", "country", "price", ...GROUPS.flatMap((g) => [`${g}-total`, `${g}-high`])];
+  const SORT_KEYS = ["name", "country", "price", "price-high", ...GROUPS.flatMap((g) => [`${g}-total`, `${g}-high`])];
   const DEFAULTS = Object.freeze({ countries: [], q: "", min: 0, maxPrice: 0, fav: false, sort: "all-high", dir: -1 });
 
   function parse(search) {

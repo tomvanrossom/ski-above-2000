@@ -9,6 +9,10 @@ const SLUG_RE = /^[a-z0-9-]+$/;
 const SUMMARY_URL_KEY = "ski-above-2000:summary-url";
 const UNNAMED_HINT_SHARE = 0.3;
 const svgNS = "http://www.w3.org/2000/svg";
+const CHILD_LISTS = ["villages", "municipalities"];
+const childSlugs = (area) => CHILD_LISTS.flatMap((k) => (Array.isArray(area[k]) ? area[k] : []));
+const childKind = (area) => (Array.isArray(area.municipalities) ? "Municipalities" : "Villages");
+const euroPerKm = (n) => `€ ${I18N.num(n, 2)}`;
 
 function el(tag, attrs = {}, text) {
   const node = tag.startsWith("svg:") ? document.createElementNS(svgNS, tag.slice(4)) : document.createElement(tag);

@@ -14,6 +14,11 @@ test("full state round-trips through the query string", () => {
   assert.deepEqual(UrlState.parse(query), state);
 });
 
+test("price sorts survive the query string", () => {
+  assert.equal(UrlState.parse("?sort=price").sort, "price");
+  assert.equal(UrlState.parse("?sort=price-high").sort, "price-high");
+});
+
 test("invalid values fall back to defaults", () => {
   assert.deepEqual(UrlState.parse("?min=-4&sort=bogus&dir=up&fav=yes&c=,,"), { ...UrlState.DEFAULTS });
   assert.equal(UrlState.parse("?min=abc").min, 0);

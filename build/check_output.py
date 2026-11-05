@@ -40,14 +40,19 @@ def check_summary(areas):
     return errors
 
 
+CHILD_LISTS = {"village": "villages", "municipality": "municipalities"}
+
+
 def check_links(areas):
     by_slug = {a.get("slug"): a for a in areas}
     errors = []
     for a in areas:
-        if "parent" in a and a["slug"] not in by_slug.get(a["parent"], {}).get("villages", []):
+        parent = by_slug.get(a.get("parent"), {})
+        if "parent" in a and not any(a["slug"] in parent.get(key, []) for key in CHILD_LISTS.values()):
             errors.append(f"{a['slug']}: parent {a['parent']} missing or does not list it")
-        errors += [f"{a['slug']}: village {v} missing or has another parent"
-                   for v in a.get("villages", []) if by_slug.get(v, {}).get("parent") != a["slug"]]
+        errors += [f"{a['slug']}: {kind} {c} missing or has another parent"
+                   for kind, key in CHILD_LISTS.items() for c in a.get(key, [])
+                   if by_slug.get(c, {}).get("parent") != a["slug"]]
     return errors
 
 

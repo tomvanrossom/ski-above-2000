@@ -17,6 +17,7 @@
   #areas td.c-name { white-space: normal; min-width: 150px; max-width: 240px; overflow-wrap: anywhere; }
   #areas .price-cell { white-space: nowrap; border-left: 1px solid var(--line); }
   #areas .price-per-km { color: var(--muted); font-size: 11px; }
+  #areas th button.sub-sort { display: block; margin-top: 2px; font-size: 11px; text-transform: none; letter-spacing: 0; }
   #areas thead .c-cmp { font-size: 10px; letter-spacing: 0; }
   #areas input[type="checkbox"] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
   #areas thead tr:first-child th { border-bottom: 0; padding-bottom: 0; }
@@ -27,8 +28,13 @@
   th.left, td.country { text-align: left !important; }
   td.country { color: var(--muted); white-space: normal; }
   td a.name { font-weight: 600; }
-  #areas tr.village td.c-name { padding-left: 28px; }
+  #areas { --child-tint: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+  #areas tr.expanded td, #areas tr.village td { background: var(--child-tint); }
+  #areas tr.expanded td { border-bottom-color: transparent; }
+  #areas tr.village td.c-name { padding-left: 36px; box-shadow: inset 3px 0 var(--accent); }
   #areas tr.village td.c-name a.name { font-weight: 400; }
+  #areas tr.village td.c-name a.name::before { content: "└ "; content: "└ " / ""; color: var(--muted); margin-left: -16px; }
+  #areas tr.village.last-child td { border-bottom: 2px solid var(--line); }
   .village-toggle { display: block; margin-top: 4px; padding: 2px 0; font: inherit; font-size: 12px; color: var(--accent); background: none; border: 0; cursor: pointer; text-align: left; }
   .area-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; font-size: 12px; color: var(--muted); }
   .area-meta a { color: var(--accent); }
@@ -110,6 +116,7 @@
 <script src="i18n.js"></script>
 <script src="common.js"></script>
 <script src="favourites.js"></script>
+<script src="price.js"></script>
 <script src="url-state.js"></script>
 <script src="compare-targets.js"></script>
 <script src="summary.js"></script>

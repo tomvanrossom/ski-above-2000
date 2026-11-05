@@ -9,7 +9,7 @@ const COLUMNS = [
 const DIFF_ORDER = Object.fromEntries(COLOURS.map((c, i) => [c.key, i]));
 
 let area = null;
-let related = { parent: null, villages: [] };
+let related = { parent: null, children: [] };
 let active = new Set(COLOURS.map((c) => c.key));
 let sort = { key: "start_m", dir: -1 };
 
@@ -35,6 +35,14 @@ function stat(value, labelKey) {
   return d;
 }
 
+function priceStats() {
+  const price = Price.value(area);
+  if (price === null) return [];
+  return [stat(`€ ${I18N.num(price)}`, "statPrice"),
+    ...[[Price.perTotalKm(area), "statPerKm"], [Price.perHighKm(area), "statPerHighKm"]]
+      .filter(([v]) => v !== null).map(([v, label]) => stat(euroPerKm(v), label))];
+}
+
 function renderHeader({ all }) {
   const header = el("header");
   const title = el("div", { class: "title-line" });
@@ -42,7 +50,7 @@ function renderHeader({ all }) {
   const stats = el("div", { class: "stats" });
   stats.append(stat(I18N.km(sumKm(all)), "statTotal"), stat(I18N.km(sumKm(all.filter((p) => !isLow(p)))), "statHigh"),
     stat(I18N.m(Math.max(...all.map((p) => p.start_m))), "statTop"),
-    stat(I18N.m(Math.min(...all.map((p) => p.end_m))), "statBottom"));
+    stat(I18N.m(Math.min(...all.map((p) => p.end_m))), "statBottom"), ...priceStats());
   const links = el("div", { class: "header-links" });
   links.append(link(osmUrl(area.id, area.lat, area.lng, 13), I18N.t("openOnMap")));
   header.append(el("div", { class: "eyebrow" }, [...area.regions, ...area.countries.map(I18N.country)].join(" · ")),
@@ -88,14 +96,14 @@ function renderBreakdown({ named, unnamed }) {
   return section("byDifficulty", box);
 }
 
-function renderVillages() {
+function renderChildren() {
   const list = el("ul", { class: "villages" });
-  list.append(...related.villages.map((v) => {
+  list.append(...related.children.map((v) => {
     const li = el("li");
     li.append(link(`area.html#${v.slug}`, v.name));
     return li;
   }));
-  return section("villagesTitle", list);
+  return section(`title${childKind(area)}`, list);
 }
 
 function renderFilters(all) {
@@ -187,7 +195,7 @@ function render() {
   const chartBox = el("div", { class: "chart-box" });
   chartBox.append(svg);
   renderChart(svg, all.all.filter((p) => active.has(p.difficulty)), all.all, focusRow);
-  main().replaceChildren(renderHeader(all), ...(related.villages.length ? [renderVillages()] : []),
+  main().replaceChildren(renderHeader(all), ...(related.children.length ? [renderChildren()] : []),
     renderBreakdown(all), renderFilters(all.all),
     section("chartTitle", el("p", { class: "note" }, I18N.t("chartNote")), chartBox), renderTable(all.named));
 }
@@ -208,24 +216,24 @@ function isValidArea(a) {
 }
 
 async function loadRelated(data) {
-  const none = { parent: null, villages: [] };
-  if (!data.parent && !Array.isArray(data.villages)) return none;
+  const none = { parent: null, children: [] };
+  if (!data.parent && childSlugs(data).length === 0) return none;
   try {
     const all = await fetchJSON("data/areas.json");
     const bySlug = new Map(all.filter((a) => a && SLUG_RE.test(a.slug) && typeof a.name === "string").map((a) => [a.slug, a]));
     return {
       parent: bySlug.get(data.parent) ?? null,
-      villages: (data.villages ?? []).map((s) => bySlug.get(s)).filter(Boolean),
+      children: childSlugs(data).map((s) => bySlug.get(s)).filter(Boolean),
     };
   } catch (e) {
-    console.warn("Parent and villages unavailable:", e);
+    console.warn("Parent and children unavailable:", e);
     return none;
   }
 }
 
 async function load() {
   area = null;
-  related = { parent: null, villages: [] };
+  related = { parent: null, children: [] };
   const slug = decodeURIComponent(location.hash.slice(1));
   if (!SLUG_RE.test(slug)) return renderNotFound();
   try {

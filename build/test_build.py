@@ -9,14 +9,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from alps import contains, in_polygon  # noqa: E402
 from areas import assign_slugs, slugify, sub_area_ids, top_parent  # noqa: E402
-from build import PRICE_COLUMN, alpine_groups, apply_prices, read_prices, villages  # noqa: E402
+from build import (PRICE_COLUMN, alpine_groups, apply_prices, children, duplicate_tops, municipalities,  # noqa: E402
+                   read_prices, villages)
 from check_output import REQUIRED_AREAS, check_links, check_summary  # noqa: E402
 from pistes import figures, group_unnamed, merge_segments, to_run, unnamed_segments, unnamed_share  # noqa: E402
 
 
-def row(name="", ref="", difficulty="easy", length="100", top="2500", bottom="2400", run_id="x"):
+def row(name="", ref="", difficulty="easy", length="100", top="2500", bottom="2400", run_id="x", localities="",
+        lat="45.0", lng="6.0"):
     return {"name": name, "ref": ref, "difficulty": difficulty, "inclined_length_m": length,
-            "max_elevation_m": top, "min_elevation_m": bottom, "lat": "45.0", "lng": "6.0", "id": run_id}
+            "max_elevation_m": top, "min_elevation_m": bottom, "lat": lat, "lng": lng, "id": run_id,
+            "localities": localities}
 
 
 class MergeSegments(unittest.TestCase):
@@ -99,6 +102,13 @@ class OutputCheck(unittest.TestCase):
         self.assertEqual(check_links(areas), ["p: village ghost missing or has another parent",
                                               "orphan: parent nobody missing or does not list it"])
         self.assertEqual(check_links([{"slug": "p", "villages": ["v"]}, {"slug": "v", "parent": "p"}]), [])
+
+    def test_municipality_links_must_resolve_both_ways(self):
+        areas = [{"slug": "p", "municipalities": ["m", "ghost"]}, {"slug": "m", "parent": "p", "kind": "municipality"},
+                 {"slug": "stray", "parent": "p", "kind": "municipality"}]
+        self.assertEqual(check_links(areas), ["p: municipality ghost missing or has another parent",
+                                              "stray: parent p missing or does not list it"])
+        self.assertEqual(check_links([{"slug": "p", "municipalities": ["m"]}, areas[1]]), [])
 
     def test_too_few_areas_and_implausible_trois_vallees(self):
         errors = check_summary([summary("Les Trois Vallées", 90)])
@@ -237,7 +247,7 @@ class Villages(unittest.TestCase):
         rows = [{**ski_area("A", "a"), PRICE_COLUMN: "300"}, ski_area("B", "b")]
         a, b = villages("Parent", rows, counted("a", "b"))
         self.assertEqual((a["name"], a[PRICE_COLUMN], [p["name"] for p in a["pistes"]]), ("A", None, ["a piste"]))
-        self.assertEqual(b["name"], "B")
+        self.assertEqual((b["name"], b["kind"]), ("B", "village"))
 
     def test_village_named_like_the_parent_is_dropped(self):
         rows = [ski_area("Parent", "p"), ski_area("A", "a"), ski_area("B", "b")]
@@ -259,6 +269,75 @@ class Villages(unittest.TestCase):
     def test_fewer_than_two_villages_means_none(self):
         rows = [ski_area("A", "a"), ski_area("B", "b")]
         self.assertEqual(self.names("Parent", rows, counted("a")), [])
+
+
+PARENT = {"name": "Parent", "countries": ["France"], "regions": ["Savoie"], "lat": 45.5, "lng": 6.5, "id": "p"}
+
+
+def km_run(km, localities, run_id, lat="45.0", lng="6.0"):
+    return to_run(row(f"{run_id} piste", length=str(km * 1000), run_id=run_id, localities=localities, lat=lat, lng=lng))
+
+
+class Municipalities(unittest.TestCase):
+    def found(self, runs):
+        return {m["name"]: m for m in municipalities(PARENT, runs)}
+
+    def test_a_run_in_several_localities_counts_in_each(self):
+        found = self.found([km_run(3, "A;B", "ab"), km_run(3, "A", "a"), km_run(3, "B", "b")])
+        self.assertEqual({n: m["figures"]["all"][0] for n, m in found.items()}, {"A": 6.0, "B": 6.0})
+        self.assertEqual(sorted(p["name"] for p in found["A"]["pistes"]), ["a piste", "ab piste"])
+
+    def test_municipality_needs_two_km(self):
+        found = self.found([km_run(3, "A", "a"), km_run(3, "B", "b"), km_run(1.9, "C", "c")])
+        self.assertEqual(sorted(found), ["A", "B"])
+
+    def test_municipality_needs_five_percent_of_the_area(self):
+        found = self.found([km_run(30, "A", "a"), km_run(30, "B", "b"), km_run(40, "", "x"), km_run(4.9, "C", "c")])
+        self.assertEqual(sorted(found), ["A", "B"])
+
+    def test_fewer_than_two_municipalities_means_none(self):
+        self.assertEqual(self.found([km_run(10, "A", "a"), km_run(1, "B", "b"), km_run(10, "", "x")]), {})
+
+    def test_municipality_is_unpriced_and_located_at_its_runs(self):
+        a, _ = municipalities({**PARENT, PRICE_COLUMN: 300}, [
+            km_run(3, "A", "a1", lat="45.0", lng="6.0"), km_run(1, "A", "a2", lat="46.0", lng="7.0"),
+            km_run(3, "B", "b", lat="", lng="")])
+        self.assertEqual((a["kind"], a[PRICE_COLUMN], a["lat"], a["lng"]), ("municipality", None, 45.25, 6.25))
+        self.assertEqual((a["countries"], a["regions"], a["id"]), (["France"], ["Savoie"], "p"))
+
+    def test_municipality_without_located_runs_takes_the_parent_point(self):
+        _, b = municipalities(PARENT, [km_run(3, "A", "a"), km_run(3, "B", "b", lat="", lng="")])
+        self.assertEqual((b["lat"], b["lng"]), (45.5, 6.5))
+
+
+class DuplicateTops(unittest.TestCase):
+    RUN_IDS = {"p": {1, 2, 3}, "dup": {3, 4}, "far": {9}, "q": {20, 21}}
+
+    def dropped(self, tops, child_names):
+        return duplicate_tops([(n, [{"id": i}]) for n, i in tops], child_names, self.RUN_IDS)
+
+    def test_top_level_area_shown_as_a_linked_child_is_dropped(self):
+        self.assertEqual(self.dropped([("Parent", "p"), ("Val Dup", "dup")], [("Dup Val", 0)]), {1})
+
+    def test_same_name_without_shared_runs_is_kept(self):
+        self.assertEqual(self.dropped([("Parent", "p"), ("Sankt Jakob", "far")], [("Sankt Jakob", 0)]), set())
+
+    def test_area_that_is_itself_the_parent_of_a_dropped_area_is_kept(self):
+        tops = [("Parent", "p"), ("Dup", "dup"), ("Other", "q")]
+        self.assertEqual(self.dropped(tops, [("Dup", 0), ("Parent", 1)]), set())
+
+
+class Children(unittest.TestCase):
+    def test_area_with_villages_gets_no_municipalities(self):
+        runs = [km_run(3, "M1", "a-run"), km_run(3, "M2", "b-run")]
+        by_area = defaultdict(dict, {"a": {"a-run": runs[0]}, "b": {"b-run": runs[1]}})
+        found = children(PARENT, runs, [ski_area("A", "a"), ski_area("B", "b")], by_area)
+        self.assertEqual([(c["name"], c["kind"]) for c in found], [("A", "village"), ("B", "village")])
+
+    def test_area_without_villages_gets_municipalities(self):
+        runs = [km_run(3, "M1", "a-run"), km_run(3, "M2", "b-run")]
+        found = children(PARENT, runs, [], defaultdict(dict))
+        self.assertEqual([(c["name"], c["kind"]) for c in found], [("M1", "municipality"), ("M2", "municipality")])
 
 
 if __name__ == "__main__":

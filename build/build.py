@@ -4,7 +4,7 @@ import datetime
 import json
 import shutil
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -108,14 +108,18 @@ def rounded(item, keys):
 
 
 SUMMARY_KEYS = ("slug", "name", "countries", "regions", "lat", "lng", "id", "figures", "unnamed_share", PRICE_COLUMN)
-LINK_KEYS = ("parent", "villages")
+CHILD_LISTS = {"village": "villages", "municipality": "municipalities"}
+LINK_KEYS = ("parent", "kind", *CHILD_LISTS.values())
 PISTE_KEYS = ("name", "ref", "difficulty", "length_m", "start_m", "end_m", "lat", "lng", "id", "segments")
+MUNICIPALITY_MIN_KM = 2
+MUNICIPALITY_MIN_SHARE = 0.05
+
+
+def area_runs(members, counted_by_area):
+    return list({run_id: run for m in members for run_id, run in counted_by_area[m["id"]].items()}.values())
 
 
 def summarise(members, counted_by_area):
-    runs = list({run_id: run for m in members for run_id, run in counted_by_area[m["id"]].items()}.values())
-    pistes = merge_segments(runs)
-    unnamed = unnamed_segments(runs)
     first = members[0]
     return {
         "name": MERGE_OF.get(first["name"], first["name"]),
@@ -125,6 +129,14 @@ def summarise(members, counted_by_area):
         "lng": round(float(first["lng"]), 5),
         "id": first["id"],
         PRICE_COLUMN: group_price(members),
+        **run_figures(area_runs(members, counted_by_area)),
+    }
+
+
+def run_figures(runs):
+    pistes = merge_segments(runs)
+    unnamed = unnamed_segments(runs)
+    return {
         "figures": figures(pistes + unnamed),
         "unnamed_share": unnamed_share(pistes, unnamed),
         "pistes": [rounded(p, PISTE_KEYS) for p in pistes],
@@ -165,10 +177,53 @@ def villages(parent_name, candidates, counted_by_area):
     for c in candidates:
         if name_key(c["name"]) != name_key(parent_name):
             by_name[name_key(c["name"])].append(c)
-    found = [{**summarise(members, counted_by_area), "name": members[0]["name"], PRICE_COLUMN: None}
+    found = [{**summarise(members, counted_by_area), "name": members[0]["name"], PRICE_COLUMN: None, "kind": "village"}
              for members in by_name.values()]
     found = [v for v in found if v["figures"]]
     return found if len(found) >= 2 else []
+
+
+def length_km(runs):
+    return sum(r["length_m"] for r in runs) / 1000
+
+
+def weighted_point(runs, fallback):
+    located = [r for r in runs if r["lat"] is not None and r["lng"] is not None]
+    weight = sum(r["length_m"] for r in located)
+    if not weight:
+        return fallback["lat"], fallback["lng"]
+    return tuple(round(sum(r[k] * r["length_m"] for r in located) / weight, 5) for k in ("lat", "lng"))
+
+
+def municipality(parent, name, runs):
+    lat, lng = weighted_point(runs, parent)
+    return {"name": name, "countries": parent["countries"], "regions": parent["regions"], "lat": lat, "lng": lng,
+            "id": parent["id"], PRICE_COLUMN: None, "kind": "municipality", **run_figures(runs)}
+
+
+def municipalities(parent, runs):
+    """Runs grouped by locality; a run in several localities counts in each, so they may overlap."""
+    by_locality = defaultdict(list)
+    for r in runs:
+        for locality in r["localities"]:
+            by_locality[locality].append(r)
+    min_km = max(MUNICIPALITY_MIN_KM, MUNICIPALITY_MIN_SHARE * length_km(runs))
+    kept = {name: rs for name, rs in by_locality.items() if length_km(rs) >= min_km}
+    return [municipality(parent, name, rs) for name, rs in kept.items()] if len(kept) >= 2 else []
+
+
+def children(parent, runs, candidates, counted_by_area):
+    return villages(parent["name"], candidates, counted_by_area) or municipalities(parent, runs)
+
+
+def duplicate_tops(tops, child_names, run_ids_by_area):
+    """Indexes of tops [(name, members)] also shown as a child [(name, parent index)] of a top they share runs with."""
+    by_key = defaultdict(list)
+    for i, (name, _) in enumerate(tops):
+        by_key[name_key(name)].append(i)
+    ids = [set().union(*(run_ids_by_area.get(m["id"], set()) for m in members)) for _, members in tops]
+    shown_under = {i: p for name, p in child_names for i in by_key[name_key(name)] if i != p and ids[i] & ids[p]}
+    return {i for i in shown_under if i not in shown_under.values()}
 
 
 def write_json(path, data):
@@ -180,29 +235,34 @@ def build(runs_csv, areas_csv, boundary_path, out_dir, prices_csv=DEFAULT_PRICES
     boundary = load_boundary(boundary_path)
     run_ids_by_area, counted_by_area = read_runs(runs_csv)
     all_areas = apply_prices(read_areas(areas_csv), read_prices(prices_csv))
-    groups = [(summarise(m, counted_by_area), c) for m, c in alpine_groups(all_areas, run_ids_by_area, boundary)]
-    ordered = sorted(((s, c) for s, c in groups if s["figures"]), key=lambda g: order_key(g[0]))
-    found = sorted(((v, i) for i, (s, c) in enumerate(ordered) for v in villages(s["name"], c, counted_by_area)),
-                   key=lambda vi: order_key(vi[0]))
+    groups = [(summarise(m, counted_by_area), m, c) for m, c in alpine_groups(all_areas, run_ids_by_area, boundary)]
+    tops = sorted((g for g in groups if g[0]["figures"]), key=lambda g: order_key(g[0]))
+    kids = [children(s, area_runs(m, counted_by_area), c, counted_by_area) for s, m, c in tops]
+    drop = duplicate_tops([(s["name"], m) for s, m, _ in tops],
+                          [(k["name"], i) for i, ks in enumerate(kids) for k in ks], run_ids_by_area)
+    print(f"Dropped {len(drop)} top-level areas shown as a child elsewhere:",
+          sorted(tops[i][0]["name"] for i in drop))
+    ordered = [(s, ks) for i, ((s, _, _), ks) in enumerate(zip(tops, kids)) if i not in drop]
+    found = sorted(((child, i) for i, (_, ks) in enumerate(ordered) for child in ks),
+                   key=lambda ci: (list(CHILD_LISTS).index(ci[0]["kind"]), order_key(ci[0])))
     slugs = assign_slugs([(("area", i), s["name"], s["countries"]) for i, (s, _) in enumerate(ordered)] +
-                         [(("village", j), v["name"], v["countries"]) for j, (v, _) in enumerate(found)])
-    village_slugs = defaultdict(list)
-    for j, (_, i) in enumerate(found):
-        village_slugs[i].append(slugs[("village", j)])
-    areas = [{"slug": slugs[("area", i)], **s, **({"villages": village_slugs[i]} if village_slugs[i] else {})}
-             for i, (s, _) in enumerate(ordered)]
-    village_areas = [{"slug": slugs[("village", j)], **v, "parent": areas[i]["slug"]} for j, (v, i) in enumerate(found)]
+                         [(("child", j), c["name"], c["countries"]) for j, (c, _) in enumerate(found)])
+    links = defaultdict(lambda: defaultdict(list))
+    for j, (c, i) in enumerate(found):
+        links[i][CHILD_LISTS[c["kind"]]].append(slugs[("child", j)])
+    areas = [{"slug": slugs[("area", i)], **s, **links[i]} for i, (s, _) in enumerate(ordered)]
+    child_areas = [{"slug": slugs[("child", j)], **c, "parent": areas[i]["slug"]} for j, (c, i) in enumerate(found)]
 
     out = Path(out_dir)
     if (out / "areas").exists():
         shutil.rmtree(out / "areas")
     (out / "areas").mkdir(parents=True)
-    for a in areas + village_areas:
+    for a in areas + child_areas:
         write_json(out / "areas" / f"{a['slug']}.json", a)
     write_json(out / "areas.json", [{k: a[k] for k in (*SUMMARY_KEYS, *LINK_KEYS) if k in a}
-                                    for a in areas + village_areas])
+                                    for a in areas + child_areas])
     write_json(out / "meta.json", {"built": datetime.date.today().isoformat(), "areas": len(areas)})
-    return areas, village_areas
+    return areas, child_areas
 
 
 def main():
@@ -213,8 +273,10 @@ def main():
     parser.add_argument("--boundary", default=str(Path(__file__).parent.parent / "alps" / "alpine-convention.geojson"))
     parser.add_argument("--out", default=str(Path(__file__).parent.parent / "site" / "data"))
     args = parser.parse_args()
-    areas, village_areas = build(args.runs, args.areas, args.boundary, args.out, args.prices)
-    print(len(areas), "Alpine ski areas and", len(village_areas), "villages written to", args.out)
+    areas, child_areas = build(args.runs, args.areas, args.boundary, args.out, args.prices)
+    kinds = Counter(c["kind"] for c in child_areas)
+    print(len(areas), "Alpine ski areas,", kinds["village"], "villages and", kinds["municipality"],
+          "municipalities written to", args.out)
 
 
 if __name__ == "__main__":

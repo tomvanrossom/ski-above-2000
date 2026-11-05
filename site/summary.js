@@ -1,21 +1,18 @@
 const GROUPS = [{ key: "all" }, ...COLOURS];
 const MAX_COMPARE = CompareTargets.MAX;
 
-let areas = [];  // top-level only; villages are reached through bySlug
+let areas = [];  // top-level only; villages and municipalities are reached through bySlug
 let bySlug = new Map();
 let state = UrlState.parse(location.search);
 let selected = new Set();
 let expanded = new Set();
 let pendingRender = false;
 
-const villagesOf = (area) => (Array.isArray(area.villages) ? area.villages : []).map((s) => bySlug.get(s)).filter(Boolean);
-const withVillages = (list) => list.flatMap((a) => [a, ...villagesOf(a)]);
+const childrenOf = (area) => childSlugs(area).map((s) => bySlug.get(s)).filter(Boolean);
+const withChildren = (list) => list.flatMap((a) => [a, ...childrenOf(a)]);
 
 const fig = (area, group, index) => area.figures[group]?.[index] ?? 0;
-const priceValue = (area) => {
-  const price = Number(area.skipass_price_eur);
-  return Number.isFinite(price) && price > 0 ? price : null;
-};
+const PRICE_SORTS = { price: Price.value, "price-high": Price.perHighKm };
 const sortValue = (area, key) => {
   const [group, kind] = key.split("-");
   return fig(area, group, kind === "high" ? 1 : 0);
@@ -27,17 +24,17 @@ function visible() {
     (state.countries.length === 0 || a.countries.some((c) => state.countries.includes(c))) &&
     (!text || a.name.toLocaleLowerCase().includes(text)) &&
     fig(a, "all", 1) >= state.min &&
-    (state.maxPrice === 0 || (priceValue(a) !== null && priceValue(a) <= state.maxPrice)) &&
-    (!state.fav || withVillages([a]).some((v) => Favourites.has(v.slug))));
+    (state.maxPrice === 0 || (Price.value(a) !== null && Price.value(a) <= state.maxPrice)) &&
+    (!state.fav || withChildren([a]).some((v) => Favourites.has(v.slug))));
 }
 
 function compare(a, b) {
   const collator = I18N.collator();
   if (state.sort === "name") return collator.compare(a.name, b.name) * state.dir;
   if (state.sort === "country") return collator.compare(a.countries.join(), b.countries.join()) * state.dir;
-  if (state.sort === "price") {
-    const aPrice = priceValue(a);
-    const bPrice = priceValue(b);
+  if (state.sort in PRICE_SORTS) {
+    const aPrice = PRICE_SORTS[state.sort](a);
+    const bPrice = PRICE_SORTS[state.sort](b);
     if (aPrice === null && bPrice !== null) return 1;
     if (aPrice !== null && bPrice === null) return -1;
     if (aPrice !== null && bPrice !== null && aPrice !== bPrice) return (aPrice - bPrice) * state.dir;
@@ -62,8 +59,8 @@ function scheduleRender() {
   });
 }
 
-function sortButton(key, label, isNumeric = true) {
-  const b = el("button", { type: "button" }, label);
+function sortButton(key, label, isNumeric = true, attrs = {}) {
+  const b = el("button", { type: "button", ...attrs }, label);
   if (state.sort === key) b.setAttribute("aria-sort", state.dir > 0 ? "ascending" : "descending");
   b.addEventListener("click", () =>
     setState({ sort: key, dir: state.sort === key ? -state.dir : (isNumeric ? -1 : 1) }));
@@ -92,7 +89,8 @@ function renderHead() {
   const countryTh = el("th", { class: "left" });
   countryTh.append(sortButton("country", I18N.t("colCountry"), false));
   const priceTh = el("th", { class: "start" });
-  priceTh.append(sortButton("price", I18N.t("colPrice")));
+  priceTh.append(sortButton("price", I18N.t("colPrice")),
+    sortButton("price-high", `€${I18N.t("perKmHigh")}`, true, { class: "sub-sort" }));
   sub.append(favTh, compareTh, areaTh, countryTh, priceTh);
   GROUPS.forEach((g) => {
     const total = el("th", { class: "start" });
@@ -110,15 +108,17 @@ function kmCell(value, extraClass = "") {
 }
 
 function priceCell(area) {
-  const price = priceValue(area);
+  const price = Price.value(area);
   const td = el("td", { class: "price-cell" });
   if (price === null) {
     td.textContent = "–";
     return td;
   }
   td.append(el("div", {}, `€ ${I18N.num(price)}`));
-  const totalKm = fig(area, "all", 0);
-  if (totalKm > 0) td.append(el("div", { class: "price-per-km" }, `€ ${I18N.num(price / totalKm, 2)}/km`));
+  const perKm = Price.perTotalKm(area);
+  if (perKm !== null) td.append(el("div", { class: "price-per-km" }, `${euroPerKm(perKm)}/km`));
+  const perHighKm = Price.perHighKm(area);
+  if (perHighKm !== null) td.append(el("div", { class: "price-per-km" }, `${euroPerKm(perHighKm)}${I18N.t("perKmHigh")}`));
   return td;
 }
 
@@ -158,7 +158,7 @@ function villageToggle(a, children) {
     "aria-controls": children.map((v) => villageRowId(v.slug)).join(" "),
   });
   button.append(el("span", { "aria-hidden": "true" }, isOpen ? "▾ " : "▸ "),
-    I18N.t(isOpen ? "hideVillages" : "showVillages", { n: children.length }), el("span", { class: "visually-hidden" }, `: ${a.name}`));
+    I18N.t(`${isOpen ? "hide" : "show"}${childKind(a)}`, { n: children.length }), el("span", { class: "visually-hidden" }, `: ${a.name}`));
   button.addEventListener("click", () => {
     const next = new Set(expanded);
     if (isOpen) next.delete(a.slug); else next.add(a.slug);
@@ -169,22 +169,24 @@ function villageToggle(a, children) {
   return button;
 }
 
-function areaCell(a) {
+function areaCell(a, parent) {
   const td = el("td", { class: "c-name" });
   const meta = el("div", { class: "area-meta" });
   if (a.regions.length) meta.append(el("span", {}, a.regions.join(" · ")));
   meta.append(link(osmUrl(a.id, a.lat, a.lng, 13), I18N.t("openSkiMap")));
-  td.append(el("a", { href: `area.html#${a.slug}`, class: "name" }, a.name), meta);
+  td.append(el("a", { href: `area.html#${a.slug}`, class: "name" }, a.name));
+  if (parent) td.append(el("span", { class: "visually-hidden" }, ` (${I18N.t("partOf")} ${parent.name})`));
+  td.append(meta);
   const hint = unnamedHint(a.unnamed_share);
   if (hint) td.append(hint);
-  const children = villagesOf(a);
+  const children = childrenOf(a);
   if (children.length) td.append(villageToggle(a, children));
   return td;
 }
 
-function areaRow(a, maxTotal, attrs = {}) {
+function areaRow(a, maxTotal, attrs = {}, parent = null) {
   const tr = el("tr", attrs);
-  tr.append(favCell(a), compareCell(a), areaCell(a), el("td", { class: "country" }, a.countries.map(I18N.country).join(" · ")), priceCell(a));
+  tr.append(favCell(a), compareCell(a), areaCell(a, parent), el("td", { class: "country" }, a.countries.map(I18N.country).join(" · ")), priceCell(a));
   GROUPS.forEach((g) => {
     const total = kmCell(fig(a, g.key, 0), "start");
     if (g.key === "all") total.append(shareBar(fig(a, "all", 0), fig(a, "all", 1), maxTotal));
@@ -195,19 +197,23 @@ function areaRow(a, maxTotal, attrs = {}) {
 
 function renderRows(list) {
   const maxTotal = Math.max(...list.map((a) => fig(a, "all", 0)), 1);
-  const rows = [...list].sort(compare).flatMap((a) => [areaRow(a, maxTotal),
-    ...villagesOf(a).sort(compare).map((v) => {
-      const tr = areaRow(v, maxTotal, { id: villageRowId(v.slug), class: "village" });
-      tr.hidden = !expanded.has(a.slug);
-      return tr;
-    })]);
+  const rows = [...list].sort(compare).flatMap((a) => {
+    const isOpen = expanded.has(a.slug);
+    const children = childrenOf(a).sort(compare);
+    return [areaRow(a, maxTotal, isOpen && children.length ? { class: "expanded" } : {}),
+      ...children.map((v, i) => {
+        const tr = areaRow(v, maxTotal, { id: villageRowId(v.slug), class: i === children.length - 1 ? "village last-child" : "village" }, a);
+        tr.hidden = !isOpen;
+        return tr;
+      })];
+  });
   document.getElementById("rows").replaceChildren(...rows);
 }
 
 function compareTargets() {
   return CompareTargets.targets({
     selected: [...selected],
-    visible: withVillages(visible()).map((a) => a.slug),
+    visible: withChildren(visible()).map((a) => a.slug),
     favourites: Favourites.list(),
     known: [...bySlug.keys()],
   });
@@ -240,7 +246,7 @@ function renderControls() {
 
 function render() {
   const list = visible();
-  selected = new Set(CompareTargets.visibleSelection([...selected], withVillages(list).map((a) => a.slug)));
+  selected = new Set(CompareTargets.visibleSelection([...selected], withChildren(list).map((a) => a.slug)));
   renderControls();
   renderHead();
   renderRows(list);
@@ -307,7 +313,7 @@ fetchJSON("data/areas.json")
     areas = valid.filter((a) => !a.parent);
     const countries = renderCountryOptions();
     const maxHigh = Math.ceil(Math.max(0, ...areas.map((a) => fig(a, "all", 1))));
-    const prices = areas.map(priceValue).filter((price) => price !== null);
+    const prices = areas.map(Price.value).filter((price) => price !== null);
     const maxPrice = Math.ceil(Math.max(0, ...prices));
     const minPrice = Math.floor(Math.min(maxPrice, ...prices));
     wireControls(maxHigh, minPrice, maxPrice);

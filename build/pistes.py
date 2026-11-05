@@ -36,6 +36,7 @@ def to_run(row):
         "lat": to_float(row["lat"]),
         "lng": to_float(row["lng"]),
         "id": row["id"],
+        "localities": list(dict.fromkeys(filter(None, row["localities"].split(";")))),
     }
 
 
@@ -113,7 +114,7 @@ def read_piste_rows(runs_csv):
     with open(runs_csv, encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
         missing = {"name", "ref", "uses", "difficulty", "inclined_length_m", "max_elevation_m",
-                   "min_elevation_m", "lat", "lng", "id", "ski_area_ids"} - set(reader.fieldnames or [])
+                   "min_elevation_m", "lat", "lng", "id", "ski_area_ids", "localities"} - set(reader.fieldnames or [])
         if missing:
             raise ValueError(f"{runs_csv}: missing columns {sorted(missing)}")
         yield from (r for r in reader if is_piste(r))
