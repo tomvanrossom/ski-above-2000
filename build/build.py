@@ -119,15 +119,20 @@ def area_runs(members, counted_by_area):
     return list({run_id: run for m in members for run_id, run in counted_by_area[m["id"]].items()}.values())
 
 
+def longest_member(members, counted_by_area):
+    return max(members, key=lambda m: sum(r["length_m"] for r in counted_by_area[m["id"]].values()))
+
+
 def summarise(members, counted_by_area):
     first = members[0]
+    main = longest_member(members, counted_by_area)
     return {
         "name": MERGE_OF.get(first["name"], first["name"]),
         "countries": multi(members, "countries"),
         "regions": multi(members, "regions"),
-        "lat": round(float(first["lat"]), 5),
-        "lng": round(float(first["lng"]), 5),
-        "id": first["id"],
+        "lat": round(float(main["lat"]), 5),
+        "lng": round(float(main["lng"]), 5),
+        "id": main["id"],
         PRICE_COLUMN: group_price(members),
         **run_figures(area_runs(members, counted_by_area)),
     }

@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from alps import contains, in_polygon  # noqa: E402
 from areas import assign_slugs, slugify, sub_area_ids, top_parent  # noqa: E402
 from build import (PRICE_COLUMN, alpine_groups, apply_prices, children, duplicate_tops, municipalities,  # noqa: E402
-                   read_prices, villages)
+                   read_prices, summarise, villages)
 from check_output import REQUIRED_AREAS, check_links, check_summary  # noqa: E402
 from pistes import figures, group_unnamed, merge_segments, to_run, unnamed_segments, unnamed_share  # noqa: E402
 
@@ -215,6 +215,28 @@ def ski_area(name, area_id, downhill="yes", lat="5", lng="5"):
 
 def counted(*area_ids):
     return defaultdict(dict, {a: {f"{a}-run": to_run(row(f"{a} piste", run_id=f"{a}-run"))} for a in area_ids})
+
+
+class Summarise(unittest.TestCase):
+    def test_merged_group_takes_id_and_point_of_its_longest_member(self):
+        members = [ski_area("Pragelato", "small", lat="1", lng="2"), ski_area("Sestriere", "big", lat="3", lng="4"),
+                   ski_area("Claviere", "mid", lat="5", lng="6")]
+        runs = defaultdict(dict, {
+            "small": {"s": to_run(row("S", length="280", run_id="s"))},
+            "big": {"b1": to_run(row("B", length="900", run_id="b1")),
+                    "b2": to_run(row("B2", length="900", run_id="b2"))},
+            "mid": {"m": to_run(row("M", length="1500", run_id="m"))}})
+
+        result = summarise(members, runs)
+
+        self.assertEqual((result["name"], result["id"], result["lat"], result["lng"]), ("Via Lattea", "big", 3, 4))
+
+    def test_tie_keeps_the_first_member(self):
+        members = [ski_area("Pragelato", "a", lat="1", lng="2"), ski_area("Sestriere", "b", lat="3", lng="4")]
+
+        result = summarise(members, counted("a", "b"))
+
+        self.assertEqual((result["id"], result["lat"], result["lng"]), ("a", 1, 2))
 
 
 class VillageCandidates(unittest.TestCase):
