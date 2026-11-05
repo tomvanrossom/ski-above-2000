@@ -6,6 +6,10 @@ let state = UrlState.parse(location.search);
 let selected = new Set();
 
 const fig = (area, group, index) => area.figures[group]?.[index] ?? 0;
+const priceValue = (area) => {
+  const price = Number(area.skipass_price_eur);
+  return Number.isFinite(price) ? price : null;
+};
 const sortValue = (area, key) => {
   const [group, kind] = key.split("-");
   return fig(area, group, kind === "high" ? 1 : 0);
@@ -24,6 +28,14 @@ function compare(a, b) {
   const collator = I18N.collator();
   if (state.sort === "name") return collator.compare(a.name, b.name) * state.dir;
   if (state.sort === "country") return collator.compare(a.countries.join(), b.countries.join()) * state.dir;
+  if (state.sort === "price") {
+    const aPrice = priceValue(a);
+    const bPrice = priceValue(b);
+    if (aPrice === null && bPrice !== null) return 1;
+    if (aPrice !== null && bPrice === null) return -1;
+    if (aPrice !== null && bPrice !== null && aPrice !== bPrice) return (aPrice - bPrice) * state.dir;
+    return collator.compare(a.name, b.name);
+  }
   return (sortValue(a, state.sort) - sortValue(b, state.sort)) * state.dir || collator.compare(a.name, b.name);
 }
 
@@ -44,7 +56,9 @@ function sortButton(key, label, isNumeric = true) {
 
 function renderHead() {
   const top = el("tr");
-  top.append(el("th", { class: "c-fav" }), el("th", { class: "c-cmp" }), el("th", { class: "c-name" }), el("th"), el("th"));
+  top.append(el("th", { class: "c-fav" }), el("th", { class: "c-cmp" }), el("th", { class: "c-name" }), el("th"));
+  const priceGroup = el("th", { class: "group start", scope: "colgroup" });
+  top.append(priceGroup);
   GROUPS.forEach((g) => {
     const th = el("th", { class: "group start", colspan: 2, scope: "colgroup" });
     const span = el("span");
@@ -61,7 +75,8 @@ function renderHead() {
   areaTh.append(sortButton("name", I18N.t("colArea"), false));
   const countryTh = el("th", { class: "left" });
   countryTh.append(sortButton("country", I18N.t("colCountry"), false));
-  const priceTh = el("th", {}, I18N.t("colPrice"));
+  const priceTh = el("th", { class: "start" });
+  priceTh.append(sortButton("price", I18N.t("colPrice")));
   sub.append(favTh, compareTh, areaTh, countryTh, priceTh);
   GROUPS.forEach((g) => {
     const total = el("th", { class: "start" });
@@ -79,8 +94,16 @@ function kmCell(value, extraClass = "") {
 }
 
 function priceCell(area) {
-  const price = area.skipass_price_eur;
-  return el("td", {}, price == null ? "–" : `€ ${I18N.num(price)}`);
+  const price = priceValue(area);
+  const td = el("td", { class: "price-cell" });
+  if (price === null) {
+    td.textContent = "–";
+    return td;
+  }
+  td.append(el("div", {}, `€ ${I18N.num(price)}`));
+  const totalKm = fig(area, "all", 0);
+  if (totalKm > 0) td.append(el("div", { class: "price-per-km" }, `€ ${I18N.num(price / totalKm, 2)}/km`));
+  return td;
 }
 
 function shareBar(total, high, maxTotal) {
