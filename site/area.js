@@ -34,13 +34,11 @@ function stat(value, labelKey) {
   return d;
 }
 
-function renderHeader({ named, unnamed, all }) {
+function renderHeader({ all }) {
   const header = el("header");
   const title = el("div", { class: "title-line" });
   title.append(el("h1", {}, area.name), Favourites.button(area.slug));
   const stats = el("div", { class: "stats" });
-  stats.append(stat(I18N.num(named.length), "statNamed"));
-  if (unnamed.length) stats.append(stat(I18N.num(unnamed.length), "statUnnamed"));
   stats.append(stat(I18N.km(sumKm(all)), "statTotal"), stat(I18N.km(sumKm(all.filter((p) => !isLow(p)))), "statHigh"),
     stat(I18N.m(Math.max(...all.map((p) => p.start_m))), "statTop"),
     stat(I18N.m(Math.min(...all.map((p) => p.end_m))), "statBottom"));
@@ -60,14 +58,13 @@ function breakdownRow(first, named, unnamed, tag = "tr") {
   const tr = el(tag);
   const label = el("td");
   label.append(...first);
-  tr.append(label, el("td", { class: "num" }, I18N.num(named.length)), el("td", { class: "num" }, I18N.num(unnamed.length)),
-    el("td", { class: "num" }, I18N.km(sumKm(both))), el("td", { class: "num" }, I18N.km(sumKm(both.filter((p) => !isLow(p))))));
+  tr.append(label, el("td", { class: "num" }, I18N.km(sumKm(both))), el("td", { class: "num" }, I18N.km(sumKm(both.filter((p) => !isLow(p))))));
   return tr;
 }
 
 function renderBreakdown({ named, unnamed }) {
   const head = el("tr");
-  head.append(...["colDifficulty", "colNamed", "colSegments", "colLength", "colFullyHigh"]
+  head.append(...["colDifficulty", "colLength", "colFullyHigh"]
     .map((k, i) => el("th", i ? { class: "num" } : {}, I18N.t(k))));
   const body = el("tbody");
   body.append(...COLOURS
