@@ -30,7 +30,6 @@ function rows() {
     ...COLOURS.map((c) => kmRow(I18N.t(c.key), c.key, c)),
     { label: I18N.t("rowTop"), ...METRES, best: true, cells: [(a) => Math.max(...pieces(a).map((p) => p.start_m))] },
     { label: I18N.t("rowBottom"), ...METRES, cells: [(a) => Math.min(...pieces(a).map((p) => p.end_m))] },
-    { label: I18N.t("rowQuality"), ...PCT, cells: [(a) => a.unnamed_share] },
   ];
 }
 
