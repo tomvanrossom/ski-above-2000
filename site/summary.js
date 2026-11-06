@@ -114,12 +114,14 @@ const missingCell = (extraClass = "") => el("td", { class: `${extraClass} zero`.
 function priceCells(area) {
   const price = Price.value(area);
   const perHighKm = Price.perHighKm(area);
-  const high = perHighKm === null ? missingCell() : el("td", { class: "price-cell" }, euroPerKm(perHighKm));
+  const perKmLine = (perKm) => el("div", { class: "price-per-km" }, `${euroPerKm(perKm)}/km`);
+  const high = perHighKm === null ? missingCell() : el("td", { class: "price-cell" });
+  if (perHighKm !== null) high.append(el("div", { "aria-hidden": "true" }, " "), perKmLine(perHighKm));
   if (price === null) return [missingCell("start"), high];
   const total = el("td", { class: "price-cell start" });
   total.append(el("div", {}, `€ ${I18N.num(price)}`));
   const perKm = Price.perTotalKm(area);
-  if (perKm !== null) total.append(el("div", { class: "price-per-km" }, `${euroPerKm(perKm)}/km`));
+  if (perKm !== null) total.append(perKmLine(perKm));
   return [total, high];
 }
 
