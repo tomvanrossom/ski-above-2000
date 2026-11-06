@@ -100,13 +100,10 @@ function renderBreakdown({ named, unnamed }) {
 }
 
 function renderRose() {
-  const src = `https://openskistats.org/ski-areas/roses-openskimap/${encodeURIComponent(area.id)}.svg`;
+  const src = roseSrc(area);
   const img = el("img", { src, alt: I18N.t("roseAlt", { name: area.name }), loading: "lazy", width: 300, height: 300 });
-  const links = { ost: link("https://openskistats.org", "OpenSkiStats"), cc: link("https://creativecommons.org/licenses/by/4.0/", "CC BY 4.0") };
-  const caption = el("figcaption", { class: "note" });
-  caption.append(...I18N.t("roseCredit").split(/\{(\w+)\}/).map((part, i) => (i % 2 ? links[part] : part)));
   const figure = el("figure", { class: "rose" });
-  figure.append(img, caption);
+  figure.append(img, roseCredit("figcaption"));
   const s = el("section");
   s.append(headingWithInfo("roseTitle", "roseInfo", "roseNote"), figure);
   if (loadedRoses.has(src)) return s;
@@ -115,7 +112,7 @@ function renderRose() {
   return s;
 }
 
-const hasRose = () => typeof area.id === "string" && area.id !== "" && area.kind !== "municipality";
+const hasRose = () => roseSrc(area) !== null;
 
 function renderPair(all) {
   const pair = el("div", { class: "pair" });

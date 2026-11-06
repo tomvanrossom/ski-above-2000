@@ -19,41 +19,44 @@ const PRICE_KM = { format: (n) => n === null ? "–" : euroPerKm(n), digits: 2 }
 const highShare = (a) => (fig(a, "all", 0) ? fig(a, "all", 1) / fig(a, "all", 0) : 0);
 
 function rows() {
-  const kmRow = (label, group, index, swatchOf) => ({ label, swatchOf, ...KM, best: true, raw: (a) => fig(a, group, index) });
-  const priceRow = (label, raw, format) => ({ label, ...format, best: "lowest", bestLabel: I18N.t("cheapest"), raw });
+  const pair = (group) => [(a) => fig(a, group, 0), (a) => fig(a, group, 1)];
+  const kmRow = (label, group, swatchOf) => ({ label, swatchOf, ...KM, best: true, cells: pair(group) });
+  const priceRow = (label, cells, format) => ({ label, ...format, best: "lowest", bestLabel: I18N.t("cheapest"), cells });
   return [
-    priceRow(I18N.t("rowPrice"), Price.value, PRICE),
-    priceRow(I18N.t("rowPricePerHighKm"), Price.perHighKm, PRICE_KM),
-    priceRow(I18N.t("rowPricePerKm"), Price.perTotalKm, PRICE_KM),
-    kmRow(I18N.t("rowTotal"), "all", 0),
-    kmRow(I18N.t("rowHigh"), "all", 1),
-    { label: I18N.t("rowPctHigh"), ...PCT, best: true, raw: highShare },
-    ...COLOURS.flatMap((c) => [
-      kmRow(I18N.t("rowColourTotal", { colour: I18N.t(c.key) }), c.key, 0, c),
-      kmRow(I18N.t("rowColourHigh", { colour: I18N.t(c.key) }), c.key, 1, c),
-    ]),
-    { label: I18N.t("rowTop"), ...METRES, best: true, raw: (a) => Math.max(...pieces(a).map((p) => p.start_m)) },
-    { label: I18N.t("rowBottom"), ...METRES, raw: (a) => Math.min(...pieces(a).map((p) => p.end_m)) },
-    { label: I18N.t("rowQuality"), ...PCT, raw: (a) => a.unnamed_share },
+    priceRow(I18N.t("rowPrice"), [Price.value], PRICE),
+    priceRow(I18N.t("rowPricePerKm"), [Price.perTotalKm, Price.perHighKm], PRICE_KM),
+    kmRow(I18N.t("rowTotal"), "all"),
+    { label: I18N.t("rowPctHigh"), ...PCT, best: true, cells: [highShare] },
+    ...COLOURS.map((c) => kmRow(I18N.t(c.key), c.key, c)),
+    { label: I18N.t("rowTop"), ...METRES, best: true, cells: [(a) => Math.max(...pieces(a).map((p) => p.start_m))] },
+    { label: I18N.t("rowBottom"), ...METRES, cells: [(a) => Math.min(...pieces(a).map((p) => p.end_m))] },
+    { label: I18N.t("rowQuality"), ...PCT, cells: [(a) => a.unnamed_share] },
   ];
 }
 
-function valueCell(text, isBest, bestLabel = I18N.t("best")) {
-  if (!isBest) return el("td", {}, text);
-  const td = el("td", { class: "best" }, text);
-  td.append(el("span", { class: "visually-hidden" }, ` (${bestLabel})`));
+function valueCell(text, isBest, colspan, bestLabel = I18N.t("best")) {
+  const td = el("td", isBest ? { class: "best", colspan } : { colspan }, text);
+  if (isBest) td.append(el("span", { class: "visually-hidden" }, ` (${bestLabel})`));
   return td;
 }
 
-function headerRow() {
-  const tr = el("tr");
-  tr.append(el("td"));
+function headerRows() {
+  const names = el("tr");
+  const subs = el("tr", { class: "sub" });
+  names.append(el("td"));
+  subs.append(el("td"));
   loaded.forEach((a) => {
-    const th = el("th", { scope: "col" });
+    const th = el("th", { scope: "colgroup", colspan: 2 });
     th.append(Favourites.button(a.slug), " ", link(`area.html#${a.slug}`, a.name));
-    tr.append(th);
+    names.append(th);
+    subs.append(el("th", { scope: "col" }, I18N.t("colTotal")), el("th", { scope: "col" }, I18N.t("colHigh")));
   });
-  return tr;
+  return [names, subs];
+}
+
+function bestOf(row, values) {
+  if (row.best === "lowest") return new Set(BestValue.lowestIndexes(values, row.digits));
+  return new Set(row.best ? BestValue.bestIndexes(values, row.digits) : []);
 }
 
 function bodyRow(row) {
@@ -66,11 +69,29 @@ function bodyRow(row) {
   } else {
     th.append(row.label);
   }
-  const values = loaded.map(row.raw);
-  const best = new Set(row.best === "lowest"
-    ? BestValue.lowestIndexes(values, row.digits)
-    : row.best ? BestValue.bestIndexes(values, row.digits) : []);
-  tr.append(th, ...values.map((v, i) => valueCell(row.format(v), best.has(i), row.bestLabel)));
+  const colspan = 2 / row.cells.length;
+  const columns = row.cells.map((raw) => {
+    const values = loaded.map(raw);
+    return { values, best: bestOf(row, values) };
+  });
+  tr.append(th, ...loaded.flatMap((_, i) => columns.map((c) =>
+    valueCell(row.format(c.values[i]), c.best.has(i), colspan, row.bestLabel))));
+  return tr;
+}
+
+function roseCell(a) {
+  const src = roseSrc(a);
+  const td = el("td", { colspan: 2, class: "rose-cell" }, src ? undefined : "–");
+  if (!src) return td;
+  const img = el("img", { src, alt: I18N.t("roseAlt", { name: a.name }), loading: "lazy", width: 160, height: 160 });
+  img.addEventListener("error", () => { td.textContent = "–"; });
+  td.append(img);
+  return td;
+}
+
+function roseRow() {
+  const tr = el("tr");
+  tr.append(el("th", { scope: "row" }, I18N.t("roseTitle")), ...loaded.map(roseCell));
   return tr;
 }
 
@@ -81,15 +102,15 @@ function render() {
     return;
   }
   const thead = el("thead");
-  thead.append(headerRow());
+  thead.append(...headerRows());
   const tbody = el("tbody");
-  tbody.append(...rows().map(bodyRow));
+  tbody.append(...rows().map(bodyRow), roseRow());
   const table = el("table", { id: "compare" });
   table.append(thead, tbody);
   const box = el("div", { class: "table-box" });
   box.append(table);
   const notes = missing.length ? [el("p", { class: "note" }, I18N.t("compareMissing", { slugs: missing.join(", ") }))] : [];
-  container.replaceChildren(box, ...notes);
+  container.replaceChildren(box, roseCredit(), ...notes);
 }
 
 async function loadArea(slug) {

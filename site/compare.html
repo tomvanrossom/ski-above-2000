@@ -11,7 +11,10 @@
   #compare th[scope="row"] { text-transform: none; letter-spacing: 0; font-size: 14px; position: sticky; left: 0; background: var(--surface); }
   #compare thead th { font-size: 16px; text-transform: none; letter-spacing: 0; color: var(--fg); white-space: normal; min-width: 150px; vertical-align: bottom; }
   #compare thead th a { color: var(--accent); }
+  #compare thead tr.sub th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); min-width: 0; text-align: right; white-space: nowrap; }
   #compare td { text-align: right; }
+  #compare td.rose-cell { text-align: center; }
+  #compare td.rose-cell img { width: 160px; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
   #compare .colour { display: inline-flex; align-items: center; gap: 6px; }
   #compare td.best { font-weight: 700; color: var(--fg); background: color-mix(in srgb, var(--accent) 16%, var(--surface)); box-shadow: inset 3px 0 0 var(--accent); }
 </style>
@@ -31,6 +34,6 @@
 <script src="favourites.js"></script>
 <script src="best-value.js?v=3"></script>
 <script src="price.js?v=1"></script>
-<script src="compare.js?v=5"></script>
+<script src="compare.js?v=6"></script>
 </body>
 </html>

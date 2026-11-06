@@ -26,6 +26,18 @@ function link(href, text, attrs = {}) {
   return el("a", { href, ...external, ...attrs }, text);
 }
 
+function roseSrc(area) {
+  const hasRose = typeof area.id === "string" && area.id !== "" && area.kind !== "municipality";
+  return hasRose ? `https://openskistats.org/ski-areas/roses-openskimap/${encodeURIComponent(area.id)}.svg` : null;
+}
+
+function roseCredit(tag = "p") {
+  const links = { ost: link("https://openskistats.org", "OpenSkiStats"), cc: link("https://creativecommons.org/licenses/by/4.0/", "CC BY 4.0") };
+  const credit = el(tag, { class: "note" });
+  credit.append(...I18N.t("roseCredit").split(/\{(\w+)\}/).map((part, i) => (i % 2 ? links[part] : part)));
+  return credit;
+}
+
 async function fetchJSON(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
