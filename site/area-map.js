@@ -3,7 +3,6 @@ const MAP_ATTRIBUTION = '© <a href="https://www.openstreetmap.org/copyright">Op
   + 'style © <a href="https://opentopomap.org">OpenTopoMap</a> (CC BY-SA) | pistes: OpenSkiMap (ODbL)';
 // The basemap is always light, so lines use the light palette in both themes.
 const MAP_COLOURS = { novice: "#2e9a4f", easy: "#2169c4", intermediate: "#d1342b", advanced: "#1b1b1b" };
-const MAP_LOW = "#3f4a55";
 
 let pisteMap = null;
 
@@ -20,7 +19,7 @@ async function loadMapLines(slug) {
 }
 
 const lineStyle = (p) => (isLow(p)
-  ? { color: MAP_LOW, weight: 2.5, opacity: 0.9, dashArray: "6 4" }
+  ? { color: MAP_COLOURS[p.difficulty], weight: 2.5, opacity: 0.75, dashArray: "6 4" }
   : { color: MAP_COLOURS[p.difficulty], weight: 4, opacity: 0.95 });
 
 function mapPieces({ named, unnamed }, lines) {
@@ -66,7 +65,7 @@ function mapLegend() {
     return span;
   };
   legend.append(item(`border-top: 4px solid ${MAP_COLOURS.easy}`, "mapLegendHigh"),
-    item(`border-top: 2px dashed ${MAP_LOW}`, "mapLegendLow"));
+    item(`border-top: 2px dashed ${MAP_COLOURS.easy}`, "mapLegendLow"));
   return legend;
 }
 
