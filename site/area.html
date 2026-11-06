@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Source+Sans+3:wght@400;600&display=swap">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="shared.css">
 <style>
   .title-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -51,6 +52,12 @@
   #chart .threshold { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 3; }
   #chart .bar { cursor: pointer; }
   #chart .bar:hover, #chart .bar:focus-visible { stroke: var(--fg); stroke-width: 2; outline: none; }
+  .map-box { height: 520px; border: 1px solid var(--line); border-radius: 6px; z-index: 0; }
+  .map-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
+  .map-legend i { display: inline-block; width: 22px; height: 0; vertical-align: middle; margin-right: 6px; }
+  .map-popup { display: grid; gap: 2px; font-family: var(--body); font-size: 14px; }
+  .map-popup b { font-size: 15px; }
+  @media (max-width: 600px) { .map-box { height: 380px; } }
   tr.low td { color: var(--muted); }
   tr.low .dot { background: var(--low) !important; box-shadow: inset 0 0 0 2px var(--c); }
   tr.group td { font-style: italic; }
@@ -78,7 +85,9 @@
 <script src="favourites.js"></script>
 <script src="price.js"></script>
 <script src="paging.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="area-chart.js"></script>
+<script src="area-map.js"></script>
 <script src="area.js"></script>
 </body>
 </html>

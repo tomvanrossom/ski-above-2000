@@ -55,7 +55,7 @@ def merge_segments(runs):
         key = (r["name"], r["ref"])
         p = pistes.get(key)
         if p is None:
-            pistes[key] = {**r, "segments": 1}
+            pistes[key] = {**r, "segments": 1, "run_ids": [r["id"]]}
             continue
         longest = p if p["length_m"] >= r["length_m"] else r
         pistes[key] = {
@@ -68,6 +68,7 @@ def merge_segments(runs):
             "start_m": max(p["start_m"], r["start_m"]),
             "end_m": min(p["end_m"], r["end_m"]),
             "segments": p["segments"] + 1,
+            "run_ids": [*p["run_ids"], r["id"]],
         }
     return sorted(pistes.values(), key=lambda p: (-p["start_m"], p["name"], p["ref"]))
 

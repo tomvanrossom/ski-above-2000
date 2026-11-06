@@ -15,6 +15,8 @@ let active = new Set(COLOURS.map((c) => c.key));
 let sort = { key: "start_m", dir: -1 };
 let page = 1;
 let hideShort = true;
+let showLow = true;
+let mapLines = null;
 const loadedRoses = new Set();
 
 const main = () => document.getElementById("main");
@@ -248,17 +250,28 @@ function renderTable({ named, all }) {
   return s;
 }
 
-function renderHideShort() {
-  const box = el("input", { id: "hide-short", type: "checkbox" });
-  box.checked = hideShort;
+function checkbox(id, isChecked, text, onChange) {
+  const box = el("input", { id, type: "checkbox" });
+  box.checked = isChecked;
   box.addEventListener("change", () => {
-    hideShort = box.checked;
+    onChange(box.checked);
     render();
-    document.getElementById("hide-short")?.focus();
+    document.getElementById(id)?.focus();
   });
   const label = el("label", { class: "check" });
-  label.append(box, el("span", {}, I18N.t("hideShort", { m: I18N.m(SHORT_PISTE_M) })));
+  label.append(box, el("span", {}, text));
   return label;
+}
+
+const renderHideShort = () => checkbox("hide-short", hideShort, I18N.t("hideShort", { m: I18N.m(SHORT_PISTE_M) }),
+  (v) => { hideShort = v; });
+
+function renderMap(all) {
+  if (mapLines?.slug !== area.slug) return [];
+  const node = el("div", { class: "chart-controls" });
+  node.append(renderFilters(all.all, "filterMapLabel", "map"),
+    checkbox("show-low", showLow, I18N.t("mapShowLow"), (v) => { showLow = v; }));
+  return renderMapSection(all, mapLines, { node, showLow });
 }
 
 function renderChartSection(all) {
@@ -280,7 +293,8 @@ function render() {
   document.title = `${area.name} · ${I18N.t("siteTitle")}`;
   const all = items();
   main().replaceChildren(renderHeader(all), ...(related.children.length ? [renderChildren()] : []),
-    renderPair(all), renderChartSection(all), renderTable(all));
+    renderPair(all), ...renderMap(all), renderChartSection(all), renderTable(all));
+  settleMap();
 }
 
 function renderNotFound() {
@@ -319,8 +333,15 @@ async function load() {
   related = { parent: null, children: [] };
   page = 1;
   hideShort = true;
-  const slug =decodeURIComponent(location.hash.slice(1));
+  showLow = true;
+  mapLines = null;
+  const slug = decodeURIComponent(location.hash.slice(1));
   if (!SLUG_RE.test(slug)) return renderNotFound();
+  loadMapLines(slug).then((lines) => {
+    if (!lines || decodeURIComponent(location.hash.slice(1)) !== slug) return;
+    mapLines = lines;
+    render();
+  });
   try {
     const response = await fetch(`data/areas/${slug}.json`);
     if (response.status === 404) return renderNotFound();

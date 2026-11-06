@@ -1,4 +1,6 @@
+import gzip
 import io
+import json
 import sys
 import tempfile
 import unittest
@@ -12,6 +14,7 @@ from areas import assign_slugs, slugify, sub_area_ids, top_parent  # noqa: E402
 from build import (PRICE_COLUMN, alpine_groups, apply_prices, children, duplicate_tops, municipalities,  # noqa: E402
                    read_prices, summarise, villages)
 from check_output import REQUIRED_AREAS, check_links, check_summary  # noqa: E402
+from geometry import read_lines, thin  # noqa: E402
 from pistes import figures, group_unnamed, merge_segments, to_run, unnamed_segments, unnamed_share  # noqa: E402
 
 
@@ -35,10 +38,34 @@ class MergeSegments(unittest.TestCase):
         self.assertEqual((piste["start_m"], piste["end_m"]), (3030, 2646))
         self.assertEqual(piste["segments"], 3)
         self.assertEqual(piste["id"], "b")
+        self.assertEqual(piste["run_ids"], ["a", "b", "c"])
 
     def test_same_name_different_ref_stays_separate(self):
         runs = [to_run(row("Combe", "1", run_id="a")), to_run(row("Combe", "2", run_id="b"))]
         self.assertEqual(len(merge_segments(runs)), 2)
+
+
+class Geometry(unittest.TestCase):
+    def test_thin_keeps_ends_and_drops_points_closer_than_the_step(self):
+        coords = [[6.0, 45.0, 2500], [6.00001, 45.00001, 2499], [6.001, 45.001, 2450], [6.00101, 45.00101, 2449]]
+        self.assertEqual(thin(coords), [[6.0, 45.0], [6.001, 45.001], [6.00101, 45.00101]])
+
+    def test_read_lines_streams_only_wanted_line_strings(self):
+        features = [
+            {"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[6.0, 45.0, 1], [6.01, 45.01, 2]]},
+             "properties": {"id": "keep"}},
+            {"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[7.0, 46.0, 1], [7.01, 46.01, 2]]},
+             "properties": {"id": "other"}},
+            {"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [[[6, 45, 1], [6, 46, 1], [7, 45, 1]]]},
+             "properties": {"id": "area"}},
+        ]
+        body = '{"type": "FeatureCollection", "features":[\n'
+        body += ",\n".join(json.dumps(f, separators=(",", ":")) for f in features) + "\n]}\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "runs.geojson.gz"
+            with gzip.open(path, "wt", encoding="utf-8") as f:
+                f.write(body)
+            self.assertEqual(read_lines(path, {"keep", "area"}), {"keep": [[6.0, 45.0], [6.01, 45.01]]})
 
 
 class Counting(unittest.TestCase):

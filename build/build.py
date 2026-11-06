@@ -9,6 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from alps import contains, load_boundary  # noqa: E402
+from geometry import read_lines  # noqa: E402
 from areas import (MERGED_AREAS, MERGE_OF, PASS_NETWORKS, assign_slugs, name_key, sub_area_ids,  # noqa: E402
                    top_parent)
 from pistes import (figures, group_unnamed, merge_segments, read_piste_rows, to_float, to_run,  # noqa: E402
@@ -113,6 +114,7 @@ LINK_KEYS = ("parent", "kind", *CHILD_LISTS.values())
 PISTE_KEYS = ("name", "ref", "difficulty", "length_m", "start_m", "end_m", "lat", "lng", "id", "segments")
 MUNICIPALITY_MIN_KM = 2
 MUNICIPALITY_MIN_SHARE = 0.05
+MAP_KEY = "_map"
 
 
 def area_runs(members, counted_by_area):
@@ -148,6 +150,7 @@ def run_figures(runs):
         "unnamed": [rounded(u, PISTE_KEYS) for u in unnamed],
         "unnamed_groups": [rounded(g, ("difficulty", "segments", "length_m", "high_m", "start_m", "end_m"))
                            for g in group_unnamed(unnamed)],
+        MAP_KEY: {"pistes": [p["run_ids"] for p in pistes], "unnamed": [[u["id"]] for u in unnamed]},
     }
 
 
@@ -236,7 +239,18 @@ def write_json(path, data):
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
 
 
-def build(runs_csv, areas_csv, boundary_path, out_dir, prices_csv=DEFAULT_PRICES):
+def write_maps(out, run_ids_by_slug, geojson_gz):
+    """data/maps/<slug>.json: per piste and unnamed segment (same order as the area file), its lines."""
+    wanted = {i for groups in run_ids_by_slug.values() for kind in groups.values() for ids in kind for i in ids}
+    lines = read_lines(geojson_gz, wanted)
+    (out / "maps").mkdir()
+    for slug, groups in run_ids_by_slug.items():
+        write_json(out / "maps" / f"{slug}.json",
+                   {kind: [[lines[i] for i in ids if i in lines] for ids in groups[kind]] for kind in groups})
+    print(f"Maps: {len(lines)} of {len(wanted)} piste lines found")
+
+
+def build(runs_csv, areas_csv, boundary_path, out_dir, prices_csv=DEFAULT_PRICES, runs_geojson=None):
     boundary = load_boundary(boundary_path)
     run_ids_by_area, counted_by_area = read_runs(runs_csv)
     all_areas = apply_prices(read_areas(areas_csv), read_prices(prices_csv))
@@ -255,15 +269,21 @@ def build(runs_csv, areas_csv, boundary_path, out_dir, prices_csv=DEFAULT_PRICES
     links = defaultdict(lambda: defaultdict(list))
     for j, (c, i) in enumerate(found):
         links[i][CHILD_LISTS[c["kind"]]].append(slugs[("child", j)])
-    areas = [{"slug": slugs[("area", i)], **s, **links[i]} for i, (s, _) in enumerate(ordered)]
-    child_areas = [{"slug": slugs[("child", j)], **c, "parent": areas[i]["slug"]} for j, (c, i) in enumerate(found)]
+    with_maps = [{"slug": slugs[("area", i)], **s, **links[i]} for i, (s, _) in enumerate(ordered)]
+    with_maps += [{"slug": slugs[("child", j)], **c, "parent": with_maps[i]["slug"]} for j, (c, i) in enumerate(found)]
+    run_ids_by_slug = {a["slug"]: a[MAP_KEY] for a in with_maps}
+    stripped = [{k: v for k, v in a.items() if k != MAP_KEY} for a in with_maps]
+    areas, child_areas = stripped[:len(ordered)], stripped[len(ordered):]
 
     out = Path(out_dir)
-    if (out / "areas").exists():
-        shutil.rmtree(out / "areas")
+    for folder in ("areas", "maps"):
+        if (out / folder).exists():
+            shutil.rmtree(out / folder)
     (out / "areas").mkdir(parents=True)
     for a in areas + child_areas:
         write_json(out / "areas" / f"{a['slug']}.json", a)
+    if runs_geojson:
+        write_maps(out, run_ids_by_slug, runs_geojson)
     write_json(out / "areas.json", [{k: a[k] for k in (*SUMMARY_KEYS, *LINK_KEYS) if k in a}
                                     for a in areas + child_areas])
     write_json(out / "meta.json", {"built": datetime.date.today().isoformat(), "areas": len(areas)})
@@ -275,10 +295,11 @@ def main():
     parser.add_argument("--runs", required=True)
     parser.add_argument("--areas", required=True)
     parser.add_argument("--prices", default=str(DEFAULT_PRICES))
+    parser.add_argument("--runs-geojson", help="OpenSkiData runs.geojson.gz; writes data/maps when given")
     parser.add_argument("--boundary", default=str(Path(__file__).parent.parent / "alps" / "alpine-convention.geojson"))
     parser.add_argument("--out", default=str(Path(__file__).parent.parent / "site" / "data"))
     args = parser.parse_args()
-    areas, child_areas = build(args.runs, args.areas, args.boundary, args.out, args.prices)
+    areas, child_areas = build(args.runs, args.areas, args.boundary, args.out, args.prices, args.runs_geojson)
     kinds = Counter(c["kind"] for c in child_areas)
     print(len(areas), "Alpine ski areas,", kinds["village"], "villages and", kinds["municipality"],
           "municipalities written to", args.out)
