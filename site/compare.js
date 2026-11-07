@@ -117,7 +117,7 @@ function showLowToggle() {
 function mapRow() {
   const tr = el("tr");
   const th = el("th", { scope: "row" });
-  th.append(el("div", {}, I18N.t("mapTitle")), showLowToggle());
+  th.append(el("div", {}, I18N.t("mapTitle")), showLowToggle(), mapLegend());
   tr.append(th,
     ...loaded.map((a) => {
       const td = el("td", { colspan: 2, class: "map-cell start" });
@@ -177,7 +177,7 @@ function render() {
   const box = el("div", { class: "table-box" });
   box.append(table);
   const notes = missing.length ? [el("p", { class: "note" }, I18N.t("compareMissing", { slugs: missing.join(", ") }))] : [];
-  container.replaceChildren(box, mapLegend(), roseCredit(), mapCredit(), ...notes);
+  container.replaceChildren(box, roseCredit(), mapCredit(), ...notes);
   miniMaps = [];
   container.querySelectorAll(".cmp-map").forEach(drawMiniMap);
 }
