@@ -3,6 +3,7 @@ const MAP_ATTRIBUTION = '© <a href="https://www.openstreetmap.org/copyright">Op
   + 'style © <a href="https://opentopomap.org">OpenTopoMap</a> (CC BY-SA) | pistes: OpenSkiMap (ODbL)';
 // The basemap is always light, so lines use the light palette in both themes.
 const MAP_COLOURS = { novice: "#2e9a4f", easy: "#2169c4", intermediate: "#d1342b", advanced: "#1b1b1b" };
+const HIGHLIGHT_STYLE = { color: "#ffd84d", weight: 12, opacity: 0.9, lineCap: "round", interactive: false };
 
 let pisteMap = null;
 
@@ -50,19 +51,28 @@ function ensureMap(slug, pieces) {
   const map = L.map(box, { scrollWheelZoom: false });
   L.tileLayer(MAP_TILES, { maxZoom: 17, opacity: 0.55, attribution: MAP_ATTRIBUTION }).addTo(map);
   const bounds = L.latLngBounds(pieces.flatMap(([, segments]) => segments.flatMap((s) => s.line)));
-  pisteMap = { slug, box, map, bounds, isFitted: false, layer: L.layerGroup().addTo(map), section: el("section") };
+  const highlight = L.layerGroup().addTo(map);
+  pisteMap = { slug, box, map, bounds, isFitted: false, highlight, layer: L.layerGroup().addTo(map), section: el("section") };
   return pisteMap;
 }
 
-function drawPistes(layer, pieces, showLow) {
+function highlightPiste(highlight, segments) {
+  highlight.clearLayers();
+  segments.forEach((s) => L.polyline(s.line, HIGHLIGHT_STYLE).addTo(highlight));
+}
+
+function drawPistes({ layer, highlight }, pieces, showLow) {
   layer.clearLayers();
-  pieces.flatMap(([p, segments]) => segments.map((s) => [p, s]))
+  highlight.clearLayers();
+  pieces.flatMap(([p, segments]) => segments.map((s) => [p, s, segments]))
     .filter(([, s]) => active.has(s.difficulty) && (showLow || !isLowSegment(s)))
     .sort(([, a], [, b]) => Number(!isLowSegment(a)) - Number(!isLowSegment(b)))
-    .forEach(([p, s]) => {
+    .forEach(([p, s, segments]) => {
       const line = L.polyline(s.line, lineStyle(s)).bindPopup(() => mapPopup(p, s)).addTo(layer);
       line.on("mouseover", () => line.setStyle({ weight: isLowSegment(s) ? 4 : 7 }));
       line.on("mouseout", () => line.setStyle(lineStyle(s)));
+      line.on("popupopen", () => highlightPiste(highlight, segments));
+      line.on("popupclose", () => highlight.clearLayers());
     });
 }
 
@@ -82,7 +92,7 @@ function renderMapSection(all, lines, controls) {
   const pieces = mapPieces(all, lines);
   if (!pieces.length || typeof L === "undefined") return [];
   const m = ensureMap(lines.slug, pieces);
-  drawPistes(m.layer, pieces, controls.showLow);
+  drawPistes(m, pieces, controls.showLow);
   m.section.replaceChildren(headingWithInfo("mapTitle", "mapInfo", "mapNote"), controls.node, m.box, mapLegend());
   return [m.section];
 }
