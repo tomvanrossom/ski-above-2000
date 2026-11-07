@@ -75,7 +75,7 @@ function sortButton(key, label, isNumeric = true) {
 
 function renderHead() {
   const top = el("tr");
-  top.append(el("th", { class: "c-fav" }), el("th", { class: "c-cmp" }), el("th", { class: "c-name" }), el("th"));
+  top.append(el("th", { class: "c-cmp" }), el("th", { class: "c-name" }), el("th", { class: "c-fav" }), el("th"));
   if (state.prices) {
     const priceGroup = el("th", { class: "group start", colspan: 2, scope: "colgroup" });
     priceGroup.append(el("span", {}, I18N.t("colPrice")));
@@ -92,12 +92,13 @@ function renderHead() {
   const sub = el("tr");
   const favTh = el("th", { class: "c-fav", scope: "col", title: I18N.t("colFav") });
   favTh.append(el("span", { "aria-hidden": "true" }, "★"), el("span", { class: "visually-hidden" }, I18N.t("colFav")));
-  const compareTh = el("th", { class: "c-cmp", scope: "col", title: I18N.t("compareLimit") }, I18N.t("colCompare"));
+  const compareTh = el("th", { class: "c-cmp", scope: "col", title: I18N.t("compareLimit") });
+  compareTh.append(el("span", { "aria-hidden": "true" }, "⇄"), el("span", { class: "visually-hidden" }, I18N.t("colCompare")));
   const areaTh = el("th", { class: "c-name" });
   areaTh.append(sortButton("name", I18N.t("colArea"), false));
   const countryTh = el("th", { class: "left" });
   countryTh.append(sortButton("country", I18N.t("colCountry"), false));
-  sub.append(favTh, compareTh, areaTh, countryTh);
+  sub.append(compareTh, areaTh, favTh, countryTh);
   if (state.prices) {
     const priceTotal = el("th", { class: "start" });
     priceTotal.append(sortButton("price", I18N.t("colTotal")));
@@ -199,7 +200,7 @@ function areaCell(a, parent) {
 
 function areaRow(a, maxTotal, attrs = {}, parent = null) {
   const tr = el("tr", attrs);
-  tr.append(favCell(a), compareCell(a), areaCell(a, parent), el("td", { class: "country" }, a.countries.map(I18N.country).join(" · ")),
+  tr.append(compareCell(a), areaCell(a, parent), favCell(a), el("td", { class: "country" }, a.countries.map(I18N.country).join(" · ")),
     ...(state.prices ? priceCells(a) : []));
   GROUPS.forEach((g) => {
     const total = kmCell(fig(a, g.key, 0), "start");

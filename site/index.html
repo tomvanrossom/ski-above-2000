@@ -13,16 +13,15 @@
 <link rel="stylesheet" href="shared.css">
 <style>
   #areas th, #areas td { text-align: right; }
-  #areas .c-fav, #areas .c-cmp, #areas .c-name { position: sticky; background: var(--surface); z-index: 1; }
-  #areas { --fav-w: 40px; --cmp-w: 64px; }
+  #areas .c-cmp, #areas .c-name { position: sticky; background: var(--surface); z-index: 1; }
+  #areas { --cmp-w: 36px; }
   #areas .c-fav, #areas .c-cmp { text-align: center; padding-inline: 4px; }
-  #areas .c-fav { left: 0; width: var(--fav-w); min-width: var(--fav-w); max-width: var(--fav-w); }
-  #areas .c-cmp { left: var(--fav-w); width: var(--cmp-w); min-width: var(--cmp-w); max-width: var(--cmp-w); }
-  #areas .c-name { left: calc(var(--fav-w) + var(--cmp-w)); text-align: left; border-right: 1px solid var(--line); }
+  #areas .c-fav { width: 40px; }
+  #areas .c-cmp { left: 0; width: var(--cmp-w); min-width: var(--cmp-w); max-width: var(--cmp-w); }
+  #areas .c-name { left: var(--cmp-w); text-align: left; border-right: 1px solid var(--line); }
   #areas td.c-name { white-space: normal; min-width: 150px; max-width: 240px; overflow-wrap: anywhere; }
   #areas .price-cell { white-space: nowrap; }
   #areas .price-per-km { color: var(--muted); font-size: 11px; }
-  #areas thead .c-cmp { font-size: 10px; letter-spacing: 0; }
   #areas input[type="checkbox"] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
   #areas thead tr:first-child th { border-bottom: 0; padding-bottom: 0; }
   #areas tbody tr:hover td { background: var(--bg); }
