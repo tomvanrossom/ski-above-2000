@@ -99,10 +99,26 @@ function roseRow() {
 }
 
 const mapLines = new Map();
+let miniMaps = [];
+let showLow = true;
+
+function showLowToggle() {
+  const box = el("input", { id: "show-low", type: "checkbox" });
+  box.checked = showLow;
+  box.addEventListener("change", () => {
+    showLow = box.checked;
+    miniMaps.forEach(drawMiniLines);
+  });
+  const label = el("label", { class: "check" });
+  label.append(box, el("span", {}, I18N.t("mapShowLow")));
+  return label;
+}
 
 function mapRow() {
   const tr = el("tr");
-  tr.append(el("th", { scope: "row" }, I18N.t("mapTitle")),
+  const th = el("th", { scope: "row" });
+  th.append(el("div", {}, I18N.t("mapTitle")), showLowToggle());
+  tr.append(th,
     ...loaded.map((a) => {
       const td = el("td", { colspan: 2, class: "map-cell start" });
       td.append(el("div", { class: "cmp-map", "data-slug": a.slug }));
@@ -124,10 +140,18 @@ async function drawMiniMap(box) {
   const map = L.map(box, { scrollWheelZoom: false, attributionControl: false });
   L.tileLayer(MAP_TILES, { maxZoom: 17, opacity: 0.55 }).addTo(map);
   L.control.scale({ imperial: false }).addTo(map);
-  [...segments].sort((a, b) => Number(!isLowSegment(a)) - Number(!isLowSegment(b)))
-    .forEach((s) => L.polyline(s.line, lineStyle(s)).addTo(map));
-  lines.lifts.forEach((l) => L.polyline(l.line, liftStyle(l)).bindPopup(() => liftPopup(l)).addTo(map));
+  const mini = { layer: L.layerGroup().addTo(map), segments, lifts: lines.lifts };
+  miniMaps.push(mini);
+  drawMiniLines(mini);
   map.setView(L.latLngBounds(segments.flatMap((s) => s.line)).getCenter(), START_ZOOM);
+}
+
+function drawMiniLines({ layer, segments, lifts }) {
+  layer.clearLayers();
+  segments.filter((s) => showLow || !isLowSegment(s))
+    .sort((a, b) => Number(!isLowSegment(a)) - Number(!isLowSegment(b)))
+    .forEach((s) => L.polyline(s.line, lineStyle(s)).addTo(layer));
+  drawLifts(layer, lifts, showLow);
 }
 
 function mapCredit() {
@@ -154,6 +178,7 @@ function render() {
   box.append(table);
   const notes = missing.length ? [el("p", { class: "note" }, I18N.t("compareMissing", { slugs: missing.join(", ") }))] : [];
   container.replaceChildren(box, mapLegend(), roseCredit(), mapCredit(), ...notes);
+  miniMaps = [];
   container.querySelectorAll(".cmp-map").forEach(drawMiniMap);
 }
 
