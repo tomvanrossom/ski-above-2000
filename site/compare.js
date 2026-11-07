@@ -33,8 +33,9 @@ function rows() {
   ];
 }
 
-function valueCell(text, isBest, colspan, bestLabel = I18N.t("best")) {
-  const td = el("td", isBest ? { class: "best", colspan } : { colspan }, text);
+function valueCell(text, isBest, colspan, isStart, bestLabel = I18N.t("best")) {
+  const cls = [isStart ? "start" : "", isBest ? "best" : ""].filter(Boolean).join(" ");
+  const td = el("td", cls ? { class: cls, colspan } : { colspan }, text);
   if (isBest) td.append(el("span", { class: "visually-hidden" }, ` (${bestLabel})`));
   return td;
 }
@@ -45,10 +46,10 @@ function headerRows() {
   names.append(el("td"));
   subs.append(el("td"));
   loaded.forEach((a) => {
-    const th = el("th", { scope: "colgroup", colspan: 2 });
+    const th = el("th", { scope: "colgroup", colspan: 2, class: "start" });
     th.append(Favourites.button(a.slug), " ", link(`area.html#${a.slug}`, a.name));
     names.append(th);
-    subs.append(el("th", { scope: "col" }, I18N.t("colTotal")), el("th", { scope: "col" }, I18N.t("colHigh")));
+    subs.append(el("th", { scope: "col", class: "start" }, I18N.t("colTotal")), el("th", { scope: "col" }, I18N.t("colHigh")));
   });
   return [names, subs];
 }
@@ -73,14 +74,14 @@ function bodyRow(row) {
     const values = loaded.map(raw);
     return { values, best: bestOf(row, values) };
   });
-  tr.append(th, ...loaded.flatMap((_, i) => columns.map((c) =>
-    valueCell(row.format(c.values[i]), c.best.has(i), colspan, row.bestLabel))));
+  tr.append(th, ...loaded.flatMap((_, i) => columns.map((c, k) =>
+    valueCell(row.format(c.values[i]), c.best.has(i), colspan, k === 0, row.bestLabel))));
   return tr;
 }
 
 function roseCell(a) {
   const src = roseSrc(a);
-  const td = el("td", { colspan: 2, class: "rose-cell" }, src ? undefined : "–");
+  const td = el("td", { colspan: 2, class: "rose-cell start" }, src ? undefined : "–");
   if (!src) return td;
   const img = el("img", { src, alt: I18N.t("roseAlt", { name: a.name }), loading: "lazy", width: 160, height: 160 });
   img.addEventListener("error", () => { td.textContent = "–"; });
@@ -104,8 +105,10 @@ function render() {
   thead.append(...headerRows());
   const tbody = el("tbody");
   tbody.append(...rows().map(bodyRow), roseRow());
-  const table = el("table", { id: "compare" });
-  table.append(thead, tbody);
+  const cols = el("colgroup");
+  cols.append(el("col", { class: "label-col" }), ...loaded.flatMap(() => [el("col"), el("col")]));
+  const table = el("table", { id: "compare", style: `min-width: calc(var(--label-w) + ${loaded.length} * var(--area-w))` });
+  table.append(cols, thead, tbody);
   const box = el("div", { class: "table-box" });
   box.append(table);
   const notes = missing.length ? [el("p", { class: "note" }, I18N.t("compareMissing", { slugs: missing.join(", ") }))] : [];
