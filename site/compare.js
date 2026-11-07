@@ -14,17 +14,12 @@ const pieces = (a) => [...a.pistes, ...a.unnamed];
 const KM = { format: (n) => I18N.km(n), digits: 1 };
 const PCT = { format: (n) => I18N.pct(n), digits: 2 };
 const METRES = { format: (n) => I18N.m(n), digits: 0 };
-const PRICE = { format: (n) => n === null ? "–" : `€ ${I18N.num(n)}`, digits: 0 };
-const PRICE_KM = { format: (n) => n === null ? "–" : euroPerKm(n), digits: 2 };
 const highShare = (a) => (fig(a, "all", 0) ? fig(a, "all", 1) / fig(a, "all", 0) : 0);
 
 function rows() {
   const pair = (group) => [(a) => fig(a, group, 0), (a) => fig(a, group, 1)];
   const kmRow = (label, group, swatchOf) => ({ label, swatchOf, ...KM, best: true, cells: pair(group) });
-  const priceRow = (label, cells, format) => ({ label, ...format, best: "lowest", bestLabel: I18N.t("cheapest"), cells });
   return [
-    priceRow(I18N.t("rowPrice"), [Price.value], PRICE),
-    priceRow(I18N.t("rowPricePerKm"), [Price.perTotalKm, Price.perHighKm], PRICE_KM),
     kmRow(I18N.t("rowTotal"), "all"),
     { label: I18N.t("rowPctHigh"), ...PCT, best: true, cells: [highShare] },
     ...COLOURS.map((c) => kmRow(I18N.t(c.key), c.key, c)),
@@ -33,10 +28,10 @@ function rows() {
   ];
 }
 
-function valueCell(text, isBest, colspan, isStart, bestLabel = I18N.t("best")) {
+function valueCell(text, isBest, colspan, isStart) {
   const cls = [isStart ? "start" : "", isBest ? "best" : ""].filter(Boolean).join(" ");
   const td = el("td", cls ? { class: cls, colspan } : { colspan }, text);
-  if (isBest) td.append(el("span", { class: "visually-hidden" }, ` (${bestLabel})`));
+  if (isBest) td.append(el("span", { class: "visually-hidden" }, ` (${I18N.t("best")})`));
   return td;
 }
 
@@ -55,7 +50,6 @@ function headerRows() {
 }
 
 function bestOf(row, values) {
-  if (row.best === "lowest") return new Set(BestValue.lowestIndexes(values, row.digits));
   return new Set(row.best ? BestValue.bestIndexes(values, row.digits) : []);
 }
 
@@ -75,7 +69,7 @@ function bodyRow(row) {
     return { values, best: bestOf(row, values) };
   });
   tr.append(th, ...loaded.flatMap((_, i) => columns.map((c, k) =>
-    valueCell(row.format(c.values[i]), c.best.has(i), colspan, k === 0, row.bestLabel))));
+    valueCell(row.format(c.values[i]), c.best.has(i), colspan, k === 0))));
   return tr;
 }
 

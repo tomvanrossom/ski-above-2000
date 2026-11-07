@@ -41,14 +41,6 @@ function stat(value, labelKey) {
   return d;
 }
 
-function priceStats() {
-  const price = Price.value(area);
-  if (price === null) return [];
-  return [stat(`€ ${I18N.num(price)}`, "statPrice"),
-    ...[[Price.perTotalKm(area), "statPerKm"], [Price.perHighKm(area), "statPerHighKm"]]
-      .filter(([v]) => v !== null).map(([v, label]) => stat(euroPerKm(v), label))];
-}
-
 function renderHeader({ all }) {
   const header = el("header");
   const title = el("div", { class: "title-line" });
@@ -57,7 +49,7 @@ function renderHeader({ all }) {
   const [totalKm, highKm] = area.figures.all;
   stats.append(stat(I18N.km(totalKm), "statTotal"), stat(I18N.km(highKm), "statHigh"),
     stat(I18N.m(Math.max(...all.map((p) => p.start_m))), "statTop"),
-    stat(I18N.m(Math.min(...all.map((p) => p.end_m))), "statBottom"), ...priceStats());
+    stat(I18N.m(Math.min(...all.map((p) => p.end_m))), "statBottom"));
   const links = el("div", { class: "header-links" });
   links.append(link(osmUrl(area.id, area.lat, area.lng, 13), I18N.t("openOnMap")));
   header.append(el("div", { class: "eyebrow" }, [...area.regions, ...area.countries.map(I18N.country)].join(" · ")),

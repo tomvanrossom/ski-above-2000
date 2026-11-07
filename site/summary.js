@@ -20,13 +20,16 @@ const sortValue = (area, key) => {
   return fig(area, group, kind === "high" ? 1 : 0);
 };
 
+const hasPriceFilter = () => state.prices && state.maxPrice > 0;
+const withoutPriceSort = () => (state.sort in PRICE_SORTS ? { sort: UrlState.DEFAULTS.sort, dir: UrlState.DEFAULTS.dir } : {});
+
 function visible() {
   const text = state.q.trim().toLocaleLowerCase();
   return areas.filter((a) =>
     (state.countries.length === 0 || a.countries.some((c) => state.countries.includes(c))) &&
     (!text || a.name.toLocaleLowerCase().includes(text)) &&
     fig(a, "all", 1) >= state.min &&
-    (state.maxPrice === 0 || (Price.value(a) !== null && Price.value(a) <= state.maxPrice)) &&
+    (!hasPriceFilter() || (Price.value(a) !== null && Price.value(a) <= state.maxPrice)) &&
     (!state.fav || withChildren([a]).some((v) => Favourites.has(v.slug))));
 }
 
@@ -73,9 +76,11 @@ function sortButton(key, label, isNumeric = true) {
 function renderHead() {
   const top = el("tr");
   top.append(el("th", { class: "c-fav" }), el("th", { class: "c-cmp" }), el("th", { class: "c-name" }), el("th"));
-  const priceGroup = el("th", { class: "group start", colspan: 2, scope: "colgroup" });
-  priceGroup.append(el("span", {}, I18N.t("colPrice")));
-  top.append(priceGroup);
+  if (state.prices) {
+    const priceGroup = el("th", { class: "group start", colspan: 2, scope: "colgroup" });
+    priceGroup.append(el("span", {}, I18N.t("colPrice")));
+    top.append(priceGroup);
+  }
   GROUPS.forEach((g) => {
     const th = el("th", { class: "group start", colspan: 2, scope: "colgroup" });
     const span = el("span");
@@ -92,11 +97,14 @@ function renderHead() {
   areaTh.append(sortButton("name", I18N.t("colArea"), false));
   const countryTh = el("th", { class: "left" });
   countryTh.append(sortButton("country", I18N.t("colCountry"), false));
-  const priceTotal = el("th", { class: "start" });
-  priceTotal.append(sortButton("price", I18N.t("colTotal")));
-  const priceHigh = el("th");
-  priceHigh.append(sortButton("price-high", I18N.t("colHigh")));
-  sub.append(favTh, compareTh, areaTh, countryTh, priceTotal, priceHigh);
+  sub.append(favTh, compareTh, areaTh, countryTh);
+  if (state.prices) {
+    const priceTotal = el("th", { class: "start" });
+    priceTotal.append(sortButton("price", I18N.t("colTotal")));
+    const priceHigh = el("th");
+    priceHigh.append(sortButton("price-high", I18N.t("colHigh")));
+    sub.append(priceTotal, priceHigh);
+  }
   GROUPS.forEach((g) => {
     const total = el("th", { class: "start" });
     total.append(sortButton(`${g.key}-total`, I18N.t("colTotal")));
@@ -191,7 +199,8 @@ function areaCell(a, parent) {
 
 function areaRow(a, maxTotal, attrs = {}, parent = null) {
   const tr = el("tr", attrs);
-  tr.append(favCell(a), compareCell(a), areaCell(a, parent), el("td", { class: "country" }, a.countries.map(I18N.country).join(" · ")), ...priceCells(a));
+  tr.append(favCell(a), compareCell(a), areaCell(a, parent), el("td", { class: "country" }, a.countries.map(I18N.country).join(" · ")),
+    ...(state.prices ? priceCells(a) : []));
   GROUPS.forEach((g) => {
     const total = kmCell(fig(a, g.key, 0), "start");
     if (g.key === "all") total.append(shareBar(fig(a, "all", 0), fig(a, "all", 1), maxTotal));
@@ -278,7 +287,7 @@ function padForCompareBar() {
 new ResizeObserver(padForCompareBar).observe(document.getElementById("compare-bar"));
 
 const hasActiveFilter = () =>
-  state.q.trim() !== "" || state.countries.length > 0 || state.min > 0 || state.maxPrice > 0 || state.fav;
+  state.q.trim() !== "" || state.countries.length > 0 || state.min > 0 || hasPriceFilter() || state.fav;
 
 function renderCompareButton() {
   const targets = compareTargets();
@@ -297,6 +306,8 @@ function renderControls() {
     ? I18N.t("maxPrice", { n: `€ ${I18N.num(state.maxPrice)}` })
     : I18N.t("anyPrice");
   document.getElementById("fav").checked = state.fav;
+  document.getElementById("show-prices").checked = state.prices;
+  document.getElementById("max-price-field").hidden = !state.prices;
   const search = document.getElementById("search");
   if (search.value !== state.q) search.value = state.q;
   const chosen = state.countries;
@@ -350,6 +361,9 @@ function wireControls(maxHigh, minPrice, maxPrice) {
   });
   document.getElementById("search").addEventListener("input", (e) => setState({ q: e.target.value }));
   document.getElementById("fav").addEventListener("change", (e) => setState({ fav: e.target.checked }));
+  document.getElementById("show-prices").addEventListener("change", (e) => setState(e.target.checked
+    ? { prices: true }
+    : { prices: false, maxPrice: 0, ...withoutPriceSort() }));
   document.getElementById("country-clear").addEventListener("click", () => setState({ countries: [] }));
   document.getElementById("reset-filters").addEventListener("click", () => {
     setState({ q: "", countries: [], min: 0, maxPrice: 0, fav: false });
@@ -392,7 +406,8 @@ fetchJSON("data/areas.json")
     setState({
       countries: state.countries.filter((c) => countries.includes(c)),
       min: Math.min(state.min, maxHigh),
-      maxPrice: state.maxPrice < maxPrice ? state.maxPrice : 0,
+      maxPrice: state.prices && state.maxPrice < maxPrice ? state.maxPrice : 0,
+      ...(state.prices ? {} : withoutPriceSort()),
     });
   })
   .catch((e) => {

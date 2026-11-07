@@ -10,16 +10,7 @@ const BestValue = (() => {
     return rounded.flatMap((v, i) => (v === max ? [i] : []));
   }
 
-  function lowestIndexes(values, digits = 0) {
-    const rounded = values.map((v) => (Number.isFinite(v) ? round(v, digits) : null));
-    const present = rounded.filter((v) => v !== null);
-    if (present.length < 2) return [];
-    const min = Math.min(...present);
-    if (min <= 0 || present.every((v) => v === min)) return [];
-    return rounded.flatMap((v, i) => (v === min ? [i] : []));
-  }
-
-  return { bestIndexes, lowestIndexes };
+  return { bestIndexes };
 })();
 
 if (typeof module === "object") module.exports = BestValue;

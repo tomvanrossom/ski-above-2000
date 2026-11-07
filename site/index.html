@@ -7,6 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Source+Sans+3:wght@400;600&display=swap">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#1f5f8b">
 <link rel="stylesheet" href="shared.css">
 <style>
   #areas th, #areas td { text-align: right; }
@@ -44,6 +47,7 @@
   .lead { margin: 6px 0 0; max-width: 70ch; font-size: 17px; line-height: 1.5; color: var(--muted); }
   .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; min-width: 0; }
   .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 16px 20px; align-items: end; }
+  .field[hidden] { display: none; }
   .field { display: grid; gap: 6px; min-width: 0; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
   .field > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .field input[type="search"], .multi summary {
@@ -132,9 +136,10 @@
       </details>
     </div>
     <label class="field"><span id="min-label"></span><input id="min" type="range" min="0" value="0"></label>
-    <label class="field"><span id="max-price-label"></span><input id="max-price" type="range" min="0" value="0"></label>
+    <label class="field" id="max-price-field"><span id="max-price-label"></span><input id="max-price" type="range" min="0" value="0"></label>
     <div class="filter-end">
       <label class="check"><input id="fav" type="checkbox"><span data-i18n="favOnly"></span></label>
+      <label class="check"><input id="show-prices" type="checkbox"><span data-i18n="showPrices"></span></label>
       <button type="button" class="text-btn" id="reset-filters" data-i18n="resetFilters" hidden></button>
     </div>
   </div>

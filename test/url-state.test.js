@@ -8,9 +8,9 @@ test("defaults serialize to an empty query and parse back", () => {
 });
 
 test("full state round-trips through the query string", () => {
-  const state = { countries: ["France", "Italy"], q: "val d'isère", min: 30, maxPrice: 400, fav: true, sort: "intermediate-total", dir: 1 };
+  const state = { countries: ["France", "Italy"], q: "val d'isère", min: 30, maxPrice: 400, fav: true, prices: true, sort: "intermediate-total", dir: 1 };
   const query = UrlState.serialize(state);
-  assert.equal(query, "?c=France%2CItaly&q=val+d%27is%C3%A8re&min=30&maxPrice=400&fav=1&sort=intermediate-total&dir=asc");
+  assert.equal(query, "?c=France%2CItaly&q=val+d%27is%C3%A8re&min=30&maxPrice=400&fav=1&prices=1&sort=intermediate-total&dir=asc");
   assert.deepEqual(UrlState.parse(query), state);
 });
 

@@ -185,3 +185,7 @@ function initPage(render) {
     })
     .catch((e) => console.warn("Build metadata unavailable:", e));
 }
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch((e) => console.warn("Offline support unavailable:", e));
+}
