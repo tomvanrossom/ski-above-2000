@@ -1,5 +1,9 @@
 # Ski above 2,000 m
 
+**Live site: [tomvanrossom.github.io/ski-above-2000](https://tomvanrossom.github.io/ski-above-2000/)**
+
+I built this to pick a ski area for a trip at the end of the season. By then the snow lower down is often slush or gone, and the better conditions are on the high pistes. So the question is not how many kilometres an area has, but how many of them stay high.
+
 A static site that compares the linked ski areas of the Alps by how much of their piste length lies **fully above 2,000 m**: pistes whose lowest point is at 2,000 m or higher. Each area has a detail page with an altitude chart and a piste list. You can star favourites, which are stored in your browser, and compare 2 to 4 areas side by side. The site is in English and Dutch.
 
 The data is rebuilt from OpenSkiData every month by GitHub Actions and published to GitHub Pages.
@@ -9,7 +13,8 @@ The data is rebuilt from OpenSkiData every month by GitHub Actions and published
 - **Alps only.** A ski area is in the Alps when its OpenSkiData point lies inside the Alpine Convention perimeter (`alps/alpine-convention.geojson`).
 - **Linked areas only.** A sub-area is dropped when at least 90% of its runs belong to one larger area, such as Val Thorens inside Les Trois Vallées. Lift-pass networks of separate resorts (`PASS_NETWORKS` in `build/areas.py`) are not shown as rows and are never used as parents. Linked areas that OpenStreetMap maps separately are merged by hand (`MERGED_AREAS`).
 - **Counted pistes.** Only downhill pistes rated novice, easy, intermediate or advanced (green, blue, red, black) count. Expert, freeride, extreme and unrated segments are left out of everything. Segments without a length or elevation are skipped.
-- **Merging.** Named segments are merged by (name, ref). The merged piste takes the hardest rating, the summed length, the highest start and the lowest end. Unnamed segments are not merged: they count towards the totals and the chart, and are grouped per colour in the piste table.
+- **Counting per segment.** Totals count each OSM segment on its own: its own colour, and above 2,000 m when the segment ends at 2,000 m or higher.
+- **Merging.** For the piste table and chart, named segments are merged by (name, ref). The merged piste takes the colour covering most of its length (ties go to the harder one, and a harder colour inside is marked), the summed length, the highest start and the lowest end. Unnamed segments are not merged: they are grouped per colour in the piste table.
 - **Slugs.** Each area's URL is `area.html#<slug>`. The slug comes from the area's name, so it stays the same when the data is refreshed. When two areas share a name, the larger one keeps the plain slug and the others get the country code added, or `-2` if that is still taken.
 
 ## Build locally
