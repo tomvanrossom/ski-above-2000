@@ -37,9 +37,10 @@ jobs:
           curl --compressed -fsSL -o .cache/runs.csv https://tiles.openskimap.org/csv/runs.csv
           curl --compressed -fsSL -o .cache/ski_areas.csv https://tiles.openskimap.org/csv/ski_areas.csv
           curl -fsSL -o .cache/runs.geojson.gz https://tiles.openskimap.org/geojson/runs.geojson.gz
+          curl -fsSL -o .cache/lifts.geojson.gz https://tiles.openskimap.org/geojson/lifts.geojson.gz
 
       - name: Build site data
-        run: python build/build.py --runs .cache/runs.csv --areas .cache/ski_areas.csv --runs-geojson .cache/runs.geojson.gz --out site/data
+        run: python build/build.py --runs .cache/runs.csv --areas .cache/ski_areas.csv --runs-geojson .cache/runs.geojson.gz --lifts-geojson .cache/lifts.geojson.gz --out site/data
 
       - name: Check site data
         run: python build/check_output.py site/data

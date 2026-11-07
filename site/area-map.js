@@ -1,8 +1,9 @@
 const MAP_TILES = "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
 const MAP_ATTRIBUTION = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, SRTM | '
-  + 'style © <a href="https://opentopomap.org">OpenTopoMap</a> (CC BY-SA) | pistes: OpenSkiMap (ODbL)';
+  + 'style © <a href="https://opentopomap.org">OpenTopoMap</a> (CC BY-SA) | pistes & lifts: OpenSkiMap (ODbL)';
 // The basemap is always light, so lines use the light palette in both themes.
 const MAP_COLOURS = { novice: "#2e9a4f", easy: "#2169c4", intermediate: "#d1342b", advanced: "#1b1b1b" };
+const LIFT_COLOUR = "#7a3fb0";
 const START_ZOOM = 13;
 const HIGHLIGHT_STYLE = { color: "#ffd84d", weight: 12, opacity: 0.9, lineCap: "round", interactive: false };
 
@@ -15,7 +16,10 @@ async function loadMapLines(slug) {
     const isSegment = (s) => s && typeof s.difficulty === "string" && Number.isFinite(s.end_m) && Array.isArray(s.line);
     const toSegments = (segments) => (Array.isArray(segments) ? segments.filter(isSegment) : [])
       .map((s) => ({ ...s, line: s.line.map(([lng, lat]) => [lat, lng]) }));
-    return { slug, pistes: data.pistes.map(toSegments), unnamed: data.unnamed.map(toSegments) };
+    const isLift = (l) => l && Number.isFinite(l.bottom_m) && Number.isFinite(l.top_m) && Array.isArray(l.line);
+    const lifts = (Array.isArray(data.lifts) ? data.lifts.filter(isLift) : [])
+      .map((l) => ({ ...l, line: l.line.map(([lng, lat]) => [lat, lng]) }));
+    return { slug, pistes: data.pistes.map(toSegments), unnamed: data.unnamed.map(toSegments), lifts };
   } catch (e) {
     console.warn("Piste map unavailable:", e);
     return null;
@@ -43,6 +47,27 @@ function mapPopup(p, s) {
   }
   box.append(link(osmUrl(p.id, p.lat, p.lng, 15), I18N.t("openOnMap")));
   return box;
+}
+
+const isLowLift = (l) => l.bottom_m < HIGH_END_M;
+const liftStyle = (l) => ({ color: LIFT_COLOUR, weight: 2.5, opacity: 0.9, ...(isLowLift(l) ? { dashArray: "2 5" } : {}) });
+
+function liftType(type) {
+  const key = `lift:${type}`;
+  const text = I18N.t(key);
+  return text === key ? String(type).replace(/_/g, " ") : text;
+}
+
+function liftPopup(l) {
+  const box = el("div", { class: "map-popup" });
+  box.append(el("b", {}, l.name || I18N.t("liftUnnamed")),
+    el("div", {}, [l.type && liftType(l.type), `${I18N.m(l.bottom_m)} → ${I18N.m(l.top_m)}`].filter(Boolean).join(" · ")));
+  return box;
+}
+
+function drawLifts(layer, lifts, showLow) {
+  lifts.filter((l) => showLow || !isLowLift(l))
+    .forEach((l) => L.polyline(l.line, liftStyle(l)).bindPopup(() => liftPopup(l)).addTo(layer));
 }
 
 function ensureMap(slug, pieces) {
@@ -86,7 +111,8 @@ function mapLegend() {
     return span;
   };
   legend.append(item(`border-top: 4px solid ${MAP_COLOURS.easy}`, "mapLegendHigh"),
-    item(`border-top: 2px dashed ${MAP_COLOURS.easy}`, "mapLegendLow"));
+    item(`border-top: 2px dashed ${MAP_COLOURS.easy}`, "mapLegendLow"),
+    item(`border-top: 3px solid ${LIFT_COLOUR}`, "mapLegendLift"));
   return legend;
 }
 
@@ -95,6 +121,7 @@ function renderMapSection(all, lines, controls) {
   if (!pieces.length || typeof L === "undefined") return [];
   const m = ensureMap(lines.slug, pieces);
   drawPistes(m, pieces, controls.showLow);
+  drawLifts(m.layer, lines.lifts, controls.showLow);
   m.section.replaceChildren(headingWithInfo("mapTitle", "mapInfo", "mapNote"), controls.node, m.box, mapLegend());
   return [m.section];
 }

@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from alps import contains, load_boundary  # noqa: E402
-from geometry import read_lines  # noqa: E402
+from geometry import inside, padded_box, read_lifts, read_lines  # noqa: E402
 from areas import (MERGED_AREAS, MERGE_OF, PASS_NETWORKS, assign_slugs, name_key, sub_area_ids,  # noqa: E402
                    top_parent)
 from pistes import (figures, group_unnamed, merge_segments, read_piste_rows, to_float, to_run,  # noqa: E402
@@ -116,6 +116,7 @@ PISTE_KEYS = ("name", "ref", "difficulty", "hardest", "length_m", "high_m", "sta
 MUNICIPALITY_MIN_KM = 2
 MUNICIPALITY_MIN_SHARE = 0.05
 MAP_KEY = "_map"
+LIFT_PAD_DEG = 0.002
 
 
 def area_runs(members, counted_by_area):
@@ -246,20 +247,33 @@ def write_json(path, data):
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
 
 
-def write_maps(out, parts_by_slug, geojson_gz):
-    """data/maps/<slug>.json: per piste and unnamed segment (same order as the area file), its segments with lines."""
+def lifts_near(lifts, piste_lines):
+    # ponytail: picks lifts by bounding box, so a neighbouring resort's lifts inside it show too; filter by ski area id if that matters.
+    if not piste_lines:
+        return []
+    box = padded_box(piste_lines, LIFT_PAD_DEG)
+    return [lift for lift in lifts if inside(lift["line"][len(lift["line"]) // 2], box)]
+
+
+def write_maps(out, parts_by_slug, geojson_gz, lifts_gz=None):
+    """data/maps/<slug>.json: per piste and unnamed segment (same order as the area file), its segments with lines,
+    plus the operating lifts around them."""
     wanted = {p["id"] for groups in parts_by_slug.values() for kind in groups.values() for parts in kind for p in parts}
     lines = read_lines(geojson_gz, wanted)
+    all_lifts = read_lifts(lifts_gz) if lifts_gz else []
+    alpine_box = padded_box(lines.values(), LIFT_PAD_DEG) if lines else None
+    lifts = [lift for lift in all_lifts if alpine_box and inside(lift["line"][0], alpine_box)]
     (out / "maps").mkdir()
     for slug, groups in parts_by_slug.items():
-        write_json(out / "maps" / f"{slug}.json", {
-            kind: [[{**{k: v for k, v in p.items() if k != "id"}, "line": lines[p["id"]]} for p in parts if p["id"] in lines]
-                   for parts in groups[kind]]
-            for kind in groups})
-    print(f"Maps: {len(lines)} of {len(wanted)} piste lines found")
+        data = {kind: [[{**{k: v for k, v in p.items() if k != "id"}, "line": lines[p["id"]]} for p in parts if p["id"] in lines]
+                       for parts in groups[kind]]
+                for kind in groups}
+        piste_lines = [s["line"] for kind in data.values() for segments in kind for s in segments]
+        write_json(out / "maps" / f"{slug}.json", {**data, "lifts": lifts_near(lifts, piste_lines)})
+    print(f"Maps: {len(lines)} of {len(wanted)} piste lines found, {len(lifts)} Alpine lifts")
 
 
-def build(runs_csv, areas_csv, boundary_path, out_dir, prices_csv=DEFAULT_PRICES, runs_geojson=None):
+def build(runs_csv, areas_csv, boundary_path, out_dir, prices_csv=DEFAULT_PRICES, runs_geojson=None, lifts_geojson=None):
     boundary = load_boundary(boundary_path)
     run_ids_by_area, counted_by_area = read_runs(runs_csv)
     all_areas = apply_prices(read_areas(areas_csv), read_prices(prices_csv))
@@ -292,7 +306,7 @@ def build(runs_csv, areas_csv, boundary_path, out_dir, prices_csv=DEFAULT_PRICES
     for a in areas + child_areas:
         write_json(out / "areas" / f"{a['slug']}.json", a)
     if runs_geojson:
-        write_maps(out, parts_by_slug, runs_geojson)
+        write_maps(out, parts_by_slug, runs_geojson, lifts_geojson)
     write_json(out / "areas.json", [{k: a[k] for k in (*SUMMARY_KEYS, *LINK_KEYS) if k in a}
                                     for a in areas + child_areas])
     write_json(out / "meta.json", {"built": datetime.date.today().isoformat(), "areas": len(areas)})
@@ -305,10 +319,12 @@ def main():
     parser.add_argument("--areas", required=True)
     parser.add_argument("--prices", default=str(DEFAULT_PRICES))
     parser.add_argument("--runs-geojson", help="OpenSkiData runs.geojson.gz; writes data/maps when given")
+    parser.add_argument("--lifts-geojson", help="OpenSkiData lifts.geojson.gz; adds lifts to data/maps")
     parser.add_argument("--boundary", default=str(Path(__file__).parent.parent / "alps" / "alpine-convention.geojson"))
     parser.add_argument("--out", default=str(Path(__file__).parent.parent / "site" / "data"))
     args = parser.parse_args()
-    areas, child_areas = build(args.runs, args.areas, args.boundary, args.out, args.prices, args.runs_geojson)
+    areas, child_areas = build(args.runs, args.areas, args.boundary, args.out, args.prices, args.runs_geojson,
+                                 args.lifts_geojson)
     kinds = Counter(c["kind"] for c in child_areas)
     print(len(areas), "Alpine ski areas,", kinds["village"], "villages and", kinds["municipality"],
           "municipalities written to", args.out)

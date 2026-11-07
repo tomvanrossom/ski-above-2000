@@ -11,10 +11,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from alps import contains, in_polygon  # noqa: E402
 from areas import assign_slugs, slugify, sub_area_ids, top_parent  # noqa: E402
-from build import (PRICE_COLUMN, alpine_groups, apply_prices, children, duplicate_tops, municipalities,  # noqa: E402
+from build import (PRICE_COLUMN, alpine_groups, apply_prices, children, duplicate_tops, lifts_near, municipalities,  # noqa: E402
                    read_prices, summarise, villages)
 from check_output import REQUIRED_AREAS, check_links, check_summary  # noqa: E402
-from geometry import read_lines, thin  # noqa: E402
+from geometry import read_lines, thin, to_lift  # noqa: E402
 from pistes import figures, group_unnamed, merge_segments, to_run, unnamed_segments, unnamed_share  # noqa: E402
 
 
@@ -88,6 +88,21 @@ class Geometry(unittest.TestCase):
             with gzip.open(path, "wt", encoding="utf-8") as f:
                 f.write(body)
             self.assertEqual(read_lines(path, {"keep", "area"}), {"keep": [[6.0, 45.0], [6.01, 45.01]]})
+
+    def test_lift_keeps_operating_ones_with_bottom_and_top_heights(self):
+        def lift(status="operating", areas=({"id": "a"},)):
+            return {"geometry": {"type": "LineString", "coordinates": [[6.0, 45.0, 1987.6], [6.01, 45.01, 2511.2]]},
+                    "properties": {"name": " Bec ", "liftType": "chair_lift", "status": status, "skiAreas": list(areas)}}
+
+        self.assertEqual(to_lift(lift()), {"name": "Bec", "type": "chair_lift", "bottom_m": 1988, "top_m": 2511,
+                                           "line": [[6.0, 45.0], [6.01, 45.01]]})
+        self.assertIsNone(to_lift(lift(status="disused")))
+        self.assertIsNone(to_lift(lift(areas=())))
+
+    def test_lifts_near_uses_the_midpoint_inside_the_padded_piste_box(self):
+        near = {"line": [[6.0, 45.0], [6.0015, 45.0], [6.1, 45.0]]}
+        far = {"line": [[6.0, 45.0], [6.05, 45.0], [6.1, 45.0]]}
+        self.assertEqual(lifts_near([near, far], [[[6.0, 45.0], [6.001, 45.001]]]), [near])
 
 
 class Counting(unittest.TestCase):

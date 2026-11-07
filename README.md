@@ -27,7 +27,9 @@ Before building, keep the price data in `refs/skipasprijzen.csv`. The file must 
 mkdir -p .cache
 curl --compressed -fsSL -o .cache/runs.csv https://tiles.openskimap.org/csv/runs.csv
 curl --compressed -fsSL -o .cache/ski_areas.csv https://tiles.openskimap.org/csv/ski_areas.csv
-python build/build.py --runs .cache/runs.csv --areas .cache/ski_areas.csv
+curl -fsSL -o .cache/runs.geojson.gz https://tiles.openskimap.org/geojson/runs.geojson.gz
+curl -fsSL -o .cache/lifts.geojson.gz https://tiles.openskimap.org/geojson/lifts.geojson.gz
+python build/build.py --runs .cache/runs.csv --areas .cache/ski_areas.csv --runs-geojson .cache/runs.geojson.gz --lifts-geojson .cache/lifts.geojson.gz
 python build/check_output.py
 python build/test_build.py
 node --test test/url-state.test.js test/compare-targets.test.js test/best-value.test.js

@@ -26,6 +26,36 @@ def feature_id(line):
     return line[start:line.index('"', start)]
 
 
+def to_lift(feature):
+    """An operating LineString lift as {name, type, bottom_m, top_m, line}, or None."""
+    props, geometry = feature["properties"], feature["geometry"]
+    coords = geometry["coordinates"] if geometry["type"] == "LineString" else []
+    heights = [c[2] for c in coords if len(c) > 2]
+    if props.get("status") != "operating" or not props.get("skiAreas") or len(coords) < 2 or len(heights) < 2:
+        return None
+    return {"name": (props.get("name") or "").strip(), "type": props.get("liftType") or "",
+            "bottom_m": round(min(heights)), "top_m": round(max(heights)), "line": thin(coords)}
+
+
+def read_lifts(geojson_gz):
+    """All operating lifts in an OpenSkiData lifts.geojson.gz."""
+    with gzip.open(geojson_gz, "rt", encoding="utf-8") as source:
+        features = (json.loads(line.strip().rstrip(",")) for line in source if line.startswith('{"type":"Feature"'))
+        return [lift for lift in map(to_lift, features) if lift]
+
+
+def inside(point, box):
+    lng, lat = point
+    return box[0] <= lng <= box[2] and box[1] <= lat <= box[3]
+
+
+def padded_box(lines, pad_deg):
+    """[min lng, min lat, max lng, max lat] around all points of the lines."""
+    points = [p for line in lines for p in line]
+    lngs, lats = [p[0] for p in points], [p[1] for p in points]
+    return [min(lngs) - pad_deg, min(lats) - pad_deg, max(lngs) + pad_deg, max(lats) + pad_deg]
+
+
 def read_lines(geojson_gz, wanted):
     """{run id: thinned [lng, lat] line} for the wanted LineString runs in an OpenSkiData runs.geojson.gz."""
     lines = {}
