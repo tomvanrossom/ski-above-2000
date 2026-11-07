@@ -3,6 +3,7 @@ const MAP_ATTRIBUTION = '© <a href="https://www.openstreetmap.org/copyright">Op
   + 'style © <a href="https://opentopomap.org">OpenTopoMap</a> (CC BY-SA) | pistes: OpenSkiMap (ODbL)';
 // The basemap is always light, so lines use the light palette in both themes.
 const MAP_COLOURS = { novice: "#2e9a4f", easy: "#2169c4", intermediate: "#d1342b", advanced: "#1b1b1b" };
+const START_ZOOM = 13;
 const HIGHLIGHT_STYLE = { color: "#ffd84d", weight: 12, opacity: 0.9, lineCap: "round", interactive: false };
 
 let pisteMap = null;
@@ -50,6 +51,7 @@ function ensureMap(slug, pieces) {
   const box = el("div", { class: "map-box" });
   const map = L.map(box, { scrollWheelZoom: false });
   L.tileLayer(MAP_TILES, { maxZoom: 17, opacity: 0.55, attribution: MAP_ATTRIBUTION }).addTo(map);
+  L.control.scale({ imperial: false }).addTo(map);
   const bounds = L.latLngBounds(pieces.flatMap(([, segments]) => segments.flatMap((s) => s.line)));
   const highlight = L.layerGroup().addTo(map);
   pisteMap = { slug, box, map, bounds, isFitted: false, highlight, layer: L.layerGroup().addTo(map), section: el("section") };
@@ -101,6 +103,6 @@ function settleMap() {
   if (!pisteMap?.box.isConnected) return;
   pisteMap.map.invalidateSize();
   if (pisteMap.isFitted) return;
-  pisteMap.map.fitBounds(pisteMap.bounds, { padding: [16, 16] });
+  pisteMap.map.setView(pisteMap.bounds.getCenter(), START_ZOOM);
   pisteMap.isFitted = true;
 }
