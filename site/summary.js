@@ -1,5 +1,6 @@
 const GROUPS = [{ key: "all" }, ...COLOURS];
 const MAX_COMPARE = CompareTargets.MAX;
+const PAGE_SIZE = 50;
 
 let areas = [];  // top-level only; villages and municipalities are reached through bySlug
 let bySlug = new Map();
@@ -7,6 +8,7 @@ let state = UrlState.parse(location.search);
 let selected = new Set();
 let expanded = new Set();
 let pendingRender = false;
+let page = 1;
 
 const childrenOf = (area) => childSlugs(area).map((s) => bySlug.get(s)).filter(Boolean);
 const withChildren = (list) => list.flatMap((a) => [a, ...childrenOf(a)]);
@@ -45,6 +47,7 @@ function compare(a, b) {
 
 function setState(changes, renderNow = true) {
   state = { ...state, ...changes };
+  page = 1;
   history.replaceState(null, "", location.pathname + UrlState.serialize(state));
   rememberSummaryUrl();
   if (renderNow) render();
@@ -197,9 +200,21 @@ function areaRow(a, maxTotal, attrs = {}, parent = null) {
   return tr;
 }
 
+function renderPager(slice) {
+  const box = document.getElementById("pager");
+  box.replaceChildren(...(slice.total > PAGE_SIZE ? [pager(slice, (p) => {
+    page = p;
+    render();
+    document.getElementById("table-box").scrollIntoView({ block: "start" });
+  })] : []));
+}
+
 function renderRows(list) {
   const maxTotal = Math.max(...list.map((a) => fig(a, "all", 0)), 1);
-  const rows = [...list].sort(compare).flatMap((a) => {
+  const slice = Paging.slice([...list].sort(compare), page, PAGE_SIZE);
+  page = slice.page;
+  renderPager(slice);
+  const rows = slice.rows.flatMap((a) => {
     const isOpen = expanded.has(a.slug);
     const children = childrenOf(a).sort(compare);
     return [areaRow(a, maxTotal, isOpen && children.length ? { class: "expanded" } : {}),

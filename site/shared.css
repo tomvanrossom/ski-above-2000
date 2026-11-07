@@ -46,6 +46,13 @@ section { display: grid; gap: 12px; min-width: 0; }
 .note { color: var(--muted); font-size: 13px; margin: 0; max-width: 72ch; }
 .error { padding: 16px; border: 1px solid var(--red); border-radius: 6px; background: var(--surface); }
 .table-box { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.pager { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.pager-status { margin: 0; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pager button {
+  display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--fg); font: inherit; font-size: 14px; cursor: pointer;
+}
+.pager button:disabled { opacity: .45; cursor: default; }
 table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
 th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
 td.num, th.num { text-align: right; }

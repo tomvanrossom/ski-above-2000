@@ -202,27 +202,6 @@ function groupRow(g) {
   return tr;
 }
 
-function pagerButton(key, target, isDisabled) {
-  const b = el("button", { class: "chip", type: "button", "data-pager": key }, I18N.t(key));
-  b.disabled = isDisabled;
-  b.addEventListener("click", () => {
-    page = target;
-    refreshTable();
-    const pressed = document.querySelector(`[data-pager="${key}"]`);
-    (pressed?.disabled ? document.querySelector(".pager button:not(:disabled)") : pressed)?.focus();
-  });
-  return b;
-}
-
-function renderPager({ page: current, pages, from, to, total }) {
-  const status = el("p", { class: "pager-status", "aria-live": "polite" });
-  const text = I18N.t("pageStatus", { from: I18N.num(from), to: I18N.num(to), total: I18N.num(total) });
-  requestAnimationFrame(() => { status.textContent = text; });
-  const pager = el("nav", { class: "pager", "aria-label": I18N.t("pagerLabel") });
-  pager.append(pagerButton("pagePrev", current - 1, current === 1), status, pagerButton("pageNext", current + 1, current === pages));
-  return pager;
-}
-
 function renderTable({ named, all }) {
   const head = el("tr");
   head.append(...COLUMNS.map((c) => {
@@ -248,7 +227,7 @@ function renderTable({ named, all }) {
   box.append(table);
   const s = el("section", { id: "pistes" });
   s.append(headingWithInfo("tableTitle", "tableInfo", "tableNote"), renderFilters(all, "filterTableLabel", "table"), box,
-    ...(slice.total > PAGE_SIZE ? [renderPager(slice)] : []));
+    ...(slice.total > PAGE_SIZE ? [pager(slice, (p) => { page = p; refreshTable(); })] : []));
   return s;
 }
 

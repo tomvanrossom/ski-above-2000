@@ -281,7 +281,11 @@ const I18N = (() => {
   const pct = (share) => new Intl.NumberFormat(locale(), { style: "percent", maximumFractionDigits: 0 }).format(share);
   const date = (iso) => new Intl.DateTimeFormat(locale(), { dateStyle: "long" }).format(new Date(`${iso}T00:00:00Z`));
   const country = (name) => (lang === "nl" ? COUNTRIES_NL[name] ?? name : name);
-  const collator = () => new Intl.Collator(locale());
+  const collators = new Map();
+  const collator = () => {
+    if (!collators.has(locale())) collators.set(locale(), new Intl.Collator(locale()));
+    return collators.get(locale());
+  };
 
   function apply(root = document) {
     document.documentElement.lang = lang;

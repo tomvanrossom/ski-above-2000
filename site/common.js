@@ -38,6 +38,25 @@ function roseCredit(tag = "p") {
   return credit;
 }
 
+function pager({ page, pages, from, to, total }, onPage) {
+  const button = (key, target, isDisabled) => {
+    const b = el("button", { type: "button", "data-pager": key }, I18N.t(key));
+    b.disabled = isDisabled;
+    b.addEventListener("click", () => {
+      onPage(target);
+      const pressed = document.querySelector(`[data-pager="${key}"]`);
+      (pressed?.disabled ? document.querySelector(".pager button:not(:disabled)") : pressed)?.focus();
+    });
+    return b;
+  };
+  const status = el("p", { class: "pager-status", "aria-live": "polite" });
+  const text = I18N.t("pageStatus", { from: I18N.num(from), to: I18N.num(to), total: I18N.num(total) });
+  requestAnimationFrame(() => { status.textContent = text; });
+  const nav = el("nav", { class: "pager", "aria-label": I18N.t("pagerLabel") });
+  nav.append(button("pagePrev", page - 1, page === 1), status, button("pageNext", page + 1, page === pages));
+  return nav;
+}
+
 async function fetchJSON(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
