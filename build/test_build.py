@@ -26,19 +26,41 @@ def row(name="", ref="", difficulty="easy", length="100", top="2500", bottom="24
 
 
 class MergeSegments(unittest.TestCase):
-    def test_cimalegna_segments_merge_into_one_intermediate_piste(self):
+    def test_cimalegna_segments_merge_into_one_easy_piste_containing_intermediate(self):
         runs = [to_run(row("Cimalegna", "V4", "intermediate", "264", "3030", "2970", "a")),
                 to_run(row("Cimalegna", "V4", "easy", "1756", "2970", "2646", "b")),
                 to_run(row("Cimalegna", "V4", "easy", "31", "2658", "2651", "c"))]
 
         [piste] = merge_segments(runs)
 
-        self.assertEqual(piste["difficulty"], "intermediate")
+        self.assertEqual(piste["difficulty"], "easy")
+        self.assertEqual(piste["hardest"], "intermediate")
         self.assertEqual(piste["length_m"], 2051)
+        self.assertEqual(piste["high_m"], 2051)
         self.assertEqual((piste["start_m"], piste["end_m"]), (3030, 2646))
         self.assertEqual(piste["segments"], 3)
         self.assertEqual(piste["id"], "b")
         self.assertEqual(piste["run_ids"], ["a", "b", "c"])
+
+    def test_equal_lengths_go_to_the_harder_colour_without_a_hardest_mark(self):
+        runs = [to_run(row("Duo", "1", "easy", "500", run_id="a")),
+                to_run(row("Duo", "1", "advanced", "500", run_id="b"))]
+
+        [piste] = merge_segments(runs)
+
+        self.assertEqual(piste["difficulty"], "advanced")
+        self.assertNotIn("hardest", piste)
+
+    def test_san_bernardo_counts_only_its_segments_above_2000(self):
+        runs = [to_run(row("San Bernardo", "7", "intermediate", "1574", "2428", "2233", "a")),
+                to_run(row("San Bernardo", "7", "advanced", "157", "2480", "2428", "b")),
+                to_run(row("San Bernardo", "7", "intermediate", "5134", "2012", "1519", "c"))]
+
+        [piste] = merge_segments(runs)
+
+        self.assertEqual((piste["difficulty"], piste["hardest"]), ("intermediate", "advanced"))
+        self.assertEqual(piste["high_m"], 1731)
+        self.assertEqual(figures(runs), {"all": [6.87, 1.73], "intermediate": [6.71, 1.57], "advanced": [0.16, 0.16]})
 
     def test_same_name_different_ref_stays_separate(self):
         runs = [to_run(row("Combe", "1", run_id="a")), to_run(row("Combe", "2", run_id="b"))]

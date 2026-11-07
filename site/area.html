@@ -51,7 +51,8 @@
   #chart .grid { stroke: var(--line); stroke-width: 1; }
   #chart .threshold { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 3; }
   #chart .bar { cursor: pointer; }
-  #chart .bar:hover, #chart .bar:focus-visible { stroke: var(--fg); stroke-width: 2; outline: none; }
+  #chart .bar:hover rect, #chart .bar:focus-visible rect { stroke: var(--fg); stroke-width: 2; }
+  #chart .bar:focus-visible { outline: none; }
   .map-box { height: 520px; border: 1px solid var(--line); border-radius: 6px; z-index: 0; }
   .map-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
   .map-legend i { display: inline-block; width: 22px; height: 0; vertical-align: middle; margin-right: 6px; }
@@ -64,6 +65,7 @@
   tr.flash td { background: var(--line); }
   tbody tr:hover { background: var(--bg); }
   .diff { display: inline-flex; align-items: center; gap: 6px; }
+  .contains { display: block; font-size: 12px; color: var(--muted); }
   #tip {
     position: fixed; pointer-events: none; background: var(--fg); color: var(--bg); padding: 6px 10px; border-radius: 4px;
     font-size: 13px; font-variant-numeric: tabular-nums; z-index: 5; max-width: 260px;

@@ -1,5 +1,6 @@
 import csv
 import sys
+from collections import defaultdict
 
 PISTE_USES = {"downhill", "snow_park"}
 COUNTED = ("novice", "easy", "intermediate", "advanced")
@@ -44,37 +45,48 @@ def is_named(run):
     return bool(run["name"] or run["ref"])
 
 
-def harder(a, b):
-    return a if COUNTED.index(a) >= COUNTED.index(b) else b
+def high_length(run):
+    return run["length_m"] if run["end_m"] >= HIGH_END_M else 0.0
+
+
+def main_colour(parts):
+    """The colour covering most length; a tie goes to the harder colour."""
+    lengths = defaultdict(float)
+    for r in parts:
+        lengths[r["difficulty"]] += r["length_m"]
+    return max(lengths, key=lambda d: (lengths[d], COUNTED.index(d)))
+
+
+def merged(parts):
+    longest = max(parts, key=lambda r: r["length_m"])
+    main = main_colour(parts)
+    hardest = max((r["difficulty"] for r in parts), key=COUNTED.index)
+    return {
+        **parts[0],
+        "difficulty": main,
+        **({"hardest": hardest} if hardest != main else {}),
+        "id": longest["id"],
+        "lat": longest["lat"],
+        "lng": longest["lng"],
+        "length_m": sum(r["length_m"] for r in parts),
+        "high_m": sum(high_length(r) for r in parts),
+        "start_m": max(r["start_m"] for r in parts),
+        "end_m": min(r["end_m"] for r in parts),
+        "segments": len(parts),
+        "run_ids": [r["id"] for r in parts],
+    }
 
 
 def merge_segments(runs):
-    """Named segments merge by (name, ref): hardest rating wins, lengths add up, range widens."""
-    pistes = {}
+    """Named segments merge by (name, ref): lengths add up, range widens, colour by length."""
+    groups = defaultdict(list)
     for r in filter(is_named, runs):
-        key = (r["name"], r["ref"])
-        p = pistes.get(key)
-        if p is None:
-            pistes[key] = {**r, "segments": 1, "run_ids": [r["id"]]}
-            continue
-        longest = p if p["length_m"] >= r["length_m"] else r
-        pistes[key] = {
-            **p,
-            "difficulty": harder(p["difficulty"], r["difficulty"]),
-            "id": longest["id"],
-            "lat": longest["lat"],
-            "lng": longest["lng"],
-            "length_m": p["length_m"] + r["length_m"],
-            "start_m": max(p["start_m"], r["start_m"]),
-            "end_m": min(p["end_m"], r["end_m"]),
-            "segments": p["segments"] + 1,
-            "run_ids": [*p["run_ids"], r["id"]],
-        }
-    return sorted(pistes.values(), key=lambda p: (-p["start_m"], p["name"], p["ref"]))
+        groups[(r["name"], r["ref"])].append(r)
+    return sorted(map(merged, groups.values()), key=lambda p: (-p["start_m"], p["name"], p["ref"]))
 
 
 def unnamed_segments(runs):
-    return sorted((r for r in runs if not is_named(r)), key=lambda r: (-r["start_m"], r["id"]))
+    return sorted(({**r, "high_m": high_length(r)} for r in runs if not is_named(r)), key=lambda r: (-r["start_m"], r["id"]))
 
 
 def group_unnamed(segments):
@@ -87,7 +99,7 @@ def group_unnamed(segments):
                 "difficulty": d,
                 "segments": len(of_d),
                 "length_m": sum(s["length_m"] for s in of_d),
-                "high_m": sum(s["length_m"] for s in of_d if s["end_m"] >= HIGH_END_M),
+                "high_m": sum(s["high_m"] for s in of_d),
                 "start_m": max(s["start_m"] for s in of_d),
                 "end_m": min(s["end_m"] for s in of_d),
             })
@@ -99,7 +111,7 @@ def figures(items):
     out = {}
     for item in items:
         km = item["length_m"] / 1000
-        high = km if item["end_m"] >= HIGH_END_M else 0.0
+        high = high_length(item) / 1000
         for key in ("all", item["difficulty"]):
             total, above = out.get(key, (0.0, 0.0))
             out = {**out, key: (total + km, above + high)}

@@ -10,28 +10,36 @@ async function loadMapLines(slug) {
   try {
     const data = await fetchJSON(`data/maps/${slug}.json`);
     if (!Array.isArray(data?.pistes) || !Array.isArray(data?.unnamed)) throw new Error("unexpected map data");
-    const toLatLngs = (lines) => (Array.isArray(lines) ? lines.map((line) => line.map(([lng, lat]) => [lat, lng])) : []);
-    return { slug, pistes: data.pistes.map(toLatLngs), unnamed: data.unnamed.map(toLatLngs) };
+    const isSegment = (s) => s && typeof s.difficulty === "string" && Number.isFinite(s.end_m) && Array.isArray(s.line);
+    const toSegments = (segments) => (Array.isArray(segments) ? segments.filter(isSegment) : [])
+      .map((s) => ({ ...s, line: s.line.map(([lng, lat]) => [lat, lng]) }));
+    return { slug, pistes: data.pistes.map(toSegments), unnamed: data.unnamed.map(toSegments) };
   } catch (e) {
     console.warn("Piste map unavailable:", e);
     return null;
   }
 }
 
-const lineStyle = (p) => (isLow(p)
-  ? { color: MAP_COLOURS[p.difficulty], weight: 2.5, opacity: 0.75, dashArray: "6 4" }
-  : { color: MAP_COLOURS[p.difficulty], weight: 4, opacity: 0.95 });
+const isLowSegment = (s) => s.end_m < HIGH_END_M;
+const lineStyle = (s) => (isLowSegment(s)
+  ? { color: MAP_COLOURS[s.difficulty], weight: 2.5, opacity: 0.75, dashArray: "6 4" }
+  : { color: MAP_COLOURS[s.difficulty], weight: 4, opacity: 0.95 });
 
 function mapPieces({ named, unnamed }, lines) {
   return [...named.map((p, i) => [p, lines.pistes[i]]), ...unnamed.map((u, i) => [u, lines.unnamed[i]])]
-    .filter(([, l]) => l?.length);
+    .filter(([, segments]) => segments?.length);
 }
 
-function mapPopup(p) {
+function mapPopup(p, s) {
+  const colour = (key) => I18N.t(key) + (key === p.difficulty && p.hardest ? ` · ${containsText(p.hardest)}` : "");
   const box = el("div", { class: "map-popup" });
   box.append(el("b", {}, p.label),
-    el("div", {}, `${I18N.t(p.difficulty)} · ${I18N.m(p.start_m)} → ${I18N.m(p.end_m)} · ${I18N.m(p.length_m)}`),
-    link(osmUrl(p.id, p.lat, p.lng, 15), I18N.t("openOnMap")));
+    el("div", {}, `${colour(p.difficulty)} · ${I18N.m(p.start_m)} → ${I18N.m(p.end_m)} · ${I18N.m(p.length_m)}`));
+  if (p.segments > 1) {
+    box.append(el("div", { class: "note" },
+      I18N.t("mapSection", { colour: I18N.t(s.difficulty).toLowerCase(), from: I18N.m(s.start_m), to: I18N.m(s.end_m) })));
+  }
+  box.append(link(osmUrl(p.id, p.lat, p.lng, 15), I18N.t("openOnMap")));
   return box;
 }
 
@@ -41,19 +49,20 @@ function ensureMap(slug, pieces) {
   const box = el("div", { class: "map-box" });
   const map = L.map(box, { scrollWheelZoom: false });
   L.tileLayer(MAP_TILES, { maxZoom: 17, opacity: 0.55, attribution: MAP_ATTRIBUTION }).addTo(map);
-  const bounds = L.latLngBounds(pieces.flatMap(([, lines]) => lines.flat()));
+  const bounds = L.latLngBounds(pieces.flatMap(([, segments]) => segments.flatMap((s) => s.line)));
   pisteMap = { slug, box, map, bounds, isFitted: false, layer: L.layerGroup().addTo(map), section: el("section") };
   return pisteMap;
 }
 
 function drawPistes(layer, pieces, showLow) {
   layer.clearLayers();
-  pieces.filter(([p]) => active.has(p.difficulty) && (showLow || !isLow(p)))
-    .sort(([a], [b]) => Number(!isLow(a)) - Number(!isLow(b)))
-    .forEach(([p, lines]) => {
-      const line = L.polyline(lines, lineStyle(p)).bindPopup(() => mapPopup(p)).addTo(layer);
-      line.on("mouseover", () => line.setStyle({ weight: isLow(p) ? 4 : 7 }));
-      line.on("mouseout", () => line.setStyle(lineStyle(p)));
+  pieces.flatMap(([p, segments]) => segments.map((s) => [p, s]))
+    .filter(([, s]) => active.has(s.difficulty) && (showLow || !isLowSegment(s)))
+    .sort(([, a], [, b]) => Number(!isLowSegment(a)) - Number(!isLowSegment(b)))
+    .forEach(([p, s]) => {
+      const line = L.polyline(s.line, lineStyle(s)).bindPopup(() => mapPopup(p, s)).addTo(layer);
+      line.on("mouseover", () => line.setStyle({ weight: isLowSegment(s) ? 4 : 7 }));
+      line.on("mouseout", () => line.setStyle(lineStyle(s)));
     });
 }
 

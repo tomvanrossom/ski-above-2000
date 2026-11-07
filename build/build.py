@@ -111,7 +111,8 @@ def rounded(item, keys):
 SUMMARY_KEYS = ("slug", "name", "countries", "regions", "lat", "lng", "id", "figures", "unnamed_share", PRICE_COLUMN)
 CHILD_LISTS = {"village": "villages", "municipality": "municipalities"}
 LINK_KEYS = ("parent", "kind", *CHILD_LISTS.values())
-PISTE_KEYS = ("name", "ref", "difficulty", "length_m", "start_m", "end_m", "lat", "lng", "id", "segments")
+PISTE_KEYS = ("name", "ref", "difficulty", "hardest", "length_m", "high_m", "start_m", "end_m", "lat", "lng", "id",
+              "segments")
 MUNICIPALITY_MIN_KM = 2
 MUNICIPALITY_MIN_SHARE = 0.05
 MAP_KEY = "_map"
@@ -140,17 +141,23 @@ def summarise(members, counted_by_area):
     }
 
 
+def map_part(run):
+    return {"id": run["id"], "difficulty": run["difficulty"], "start_m": round(run["start_m"]), "end_m": round(run["end_m"])}
+
+
 def run_figures(runs):
     pistes = merge_segments(runs)
     unnamed = unnamed_segments(runs)
+    by_id = {r["id"]: r for r in runs}
+    parts = lambda ids: [map_part(by_id[i]) for i in ids]  # noqa: E731
     return {
-        "figures": figures(pistes + unnamed),
+        "figures": figures(runs),
         "unnamed_share": unnamed_share(pistes, unnamed),
         "pistes": [rounded(p, PISTE_KEYS) for p in pistes],
         "unnamed": [rounded(u, PISTE_KEYS) for u in unnamed],
         "unnamed_groups": [rounded(g, ("difficulty", "segments", "length_m", "high_m", "start_m", "end_m"))
                            for g in group_unnamed(unnamed)],
-        MAP_KEY: {"pistes": [p["run_ids"] for p in pistes], "unnamed": [[u["id"]] for u in unnamed]},
+        MAP_KEY: {"pistes": [parts(p["run_ids"]) for p in pistes], "unnamed": [parts([u["id"]]) for u in unnamed]},
     }
 
 
@@ -239,14 +246,16 @@ def write_json(path, data):
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
 
 
-def write_maps(out, run_ids_by_slug, geojson_gz):
-    """data/maps/<slug>.json: per piste and unnamed segment (same order as the area file), its lines."""
-    wanted = {i for groups in run_ids_by_slug.values() for kind in groups.values() for ids in kind for i in ids}
+def write_maps(out, parts_by_slug, geojson_gz):
+    """data/maps/<slug>.json: per piste and unnamed segment (same order as the area file), its segments with lines."""
+    wanted = {p["id"] for groups in parts_by_slug.values() for kind in groups.values() for parts in kind for p in parts}
     lines = read_lines(geojson_gz, wanted)
     (out / "maps").mkdir()
-    for slug, groups in run_ids_by_slug.items():
-        write_json(out / "maps" / f"{slug}.json",
-                   {kind: [[lines[i] for i in ids if i in lines] for ids in groups[kind]] for kind in groups})
+    for slug, groups in parts_by_slug.items():
+        write_json(out / "maps" / f"{slug}.json", {
+            kind: [[{**{k: v for k, v in p.items() if k != "id"}, "line": lines[p["id"]]} for p in parts if p["id"] in lines]
+                   for parts in groups[kind]]
+            for kind in groups})
     print(f"Maps: {len(lines)} of {len(wanted)} piste lines found")
 
 
@@ -271,7 +280,7 @@ def build(runs_csv, areas_csv, boundary_path, out_dir, prices_csv=DEFAULT_PRICES
         links[i][CHILD_LISTS[c["kind"]]].append(slugs[("child", j)])
     with_maps = [{"slug": slugs[("area", i)], **s, **links[i]} for i, (s, _) in enumerate(ordered)]
     with_maps += [{"slug": slugs[("child", j)], **c, "parent": with_maps[i]["slug"]} for j, (c, i) in enumerate(found)]
-    run_ids_by_slug = {a["slug"]: a[MAP_KEY] for a in with_maps}
+    parts_by_slug = {a["slug"]: a[MAP_KEY] for a in with_maps}
     stripped = [{k: v for k, v in a.items() if k != MAP_KEY} for a in with_maps]
     areas, child_areas = stripped[:len(ordered)], stripped[len(ordered):]
 
@@ -283,7 +292,7 @@ def build(runs_csv, areas_csv, boundary_path, out_dir, prices_csv=DEFAULT_PRICES
     for a in areas + child_areas:
         write_json(out / "areas" / f"{a['slug']}.json", a)
     if runs_geojson:
-        write_maps(out, run_ids_by_slug, runs_geojson)
+        write_maps(out, parts_by_slug, runs_geojson)
     write_json(out / "areas.json", [{k: a[k] for k in (*SUMMARY_KEYS, *LINK_KEYS) if k in a}
                                     for a in areas + child_areas])
     write_json(out / "meta.json", {"built": datetime.date.today().isoformat(), "areas": len(areas)})

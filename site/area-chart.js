@@ -1,11 +1,15 @@
-const isLow = (p) => p.end_m < HIGH_END_M;
+const isLow = (p) => !p.high_m;
 const SHORT_PISTE_M = 100;
 const isShort = (p) => p.length_m < SHORT_PISTE_M;
 const CHART = { barW: 10, gap: 4, left: 52, right: 16, top: 16, bottom: 28, height: 360, step: 250, minWidth: 600 };
 
-function barStyle(p) {
+function barRects(p, x, y) {
   const color = `var(${colourOf(p.difficulty).color})`;
-  return isLow(p) ? { fill: "var(--low)", stroke: color, "stroke-width": 2 } : { fill: color };
+  const rect = (from, to, style) => el("svg:rect", { x, y: y(from), width: CHART.barW, height: Math.max(y(to) - y(from), 2), rx: 2, ...style });
+  const low = { fill: "var(--low)", stroke: color, "stroke-width": 2 };
+  if (p.end_m >= HIGH_END_M) return [rect(p.start_m, p.end_m, { fill: color })];
+  if (p.start_m <= HIGH_END_M) return [rect(p.start_m, p.end_m, low)];
+  return [rect(HIGH_END_M, p.end_m, low), rect(p.start_m, HIGH_END_M, { fill: color })];
 }
 
 function showTip(e, p) {
@@ -34,11 +38,11 @@ function renderChart(svg, items, allItems, onPick, hidden = 0) {
     nodes.push(el("svg:text", { x: left - 8, y: y(m) + 4, "text-anchor": "end" }, I18N.m(m)));
   }
   data.forEach((p, i) => {
-    const bar = el("svg:rect", {
-      class: "bar", x: left + i * (barW + gap) + gap / 2, y: y(p.start_m), width: barW,
-      height: Math.max(y(p.end_m) - y(p.start_m), 2), rx: 2, ...barStyle(p), tabindex: 0,
+    const bar = el("svg:g", {
+      class: "bar", tabindex: 0, role: "img",
       "aria-label": I18N.t("barAria", { name: p.label, top: I18N.num(p.start_m), bot: I18N.num(p.end_m) }),
     });
+    bar.append(...barRects(p, left + i * (barW + gap) + gap / 2, y));
     bar.addEventListener("mousemove", (e) => showTip(e, p));
     bar.addEventListener("mouseleave", hideTip);
     bar.addEventListener("click", () => onPick(p));

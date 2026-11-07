@@ -2,6 +2,7 @@ const COLUMNS = [
   { key: "label", label: "colPiste" },
   { key: "difficulty", label: "colDifficulty" },
   { key: "length_m", label: "colLength", num: true },
+  { key: "high_m", label: "colHigh", num: true },
   { key: "start_m", label: "colStart", num: true },
   { key: "end_m", label: "colEnd", num: true },
   { key: "drop_m", label: "colDrop", num: true },
@@ -20,7 +21,6 @@ let mapLines = null;
 const loadedRoses = new Set();
 
 const main = () => document.getElementById("main");
-const sumKm = (list) => list.reduce((s, p) => s + p.length_m, 0) / 1000;
 const pisteLabel = (p) => (p.name && p.ref ? `${p.name} (${p.ref})` : p.name || p.ref);
 
 function items() {
@@ -54,7 +54,8 @@ function renderHeader({ all }) {
   const title = el("div", { class: "title-line" });
   title.append(el("h1", {}, area.name), Favourites.button(area.slug));
   const stats = el("div", { class: "stats" });
-  stats.append(stat(I18N.km(sumKm(all)), "statTotal"), stat(I18N.km(sumKm(all.filter((p) => !isLow(p)))), "statHigh"),
+  const [totalKm, highKm] = area.figures.all;
+  stats.append(stat(I18N.km(totalKm), "statTotal"), stat(I18N.km(highKm), "statHigh"),
     stat(I18N.m(Math.max(...all.map((p) => p.start_m))), "statTop"),
     stat(I18N.m(Math.min(...all.map((p) => p.end_m))), "statBottom"), ...priceStats());
   const links = el("div", { class: "header-links" });
@@ -72,26 +73,23 @@ function renderHeader({ all }) {
   return header;
 }
 
-function breakdownRow(first, named, unnamed, tag = "tr") {
-  const both = [...named, ...unnamed];
-  const tr = el(tag);
+function breakdownRow(first, [totalKm, highKm]) {
+  const tr = el("tr");
   const label = el("td");
   label.append(...first);
-  tr.append(label, el("td", { class: "num" }, I18N.km(sumKm(both))), el("td", { class: "num" }, I18N.km(sumKm(both.filter((p) => !isLow(p))))));
+  tr.append(label, el("td", { class: "num" }, I18N.km(totalKm)), el("td", { class: "num" }, I18N.km(highKm)));
   return tr;
 }
 
-function renderBreakdown({ named, unnamed }) {
+function renderBreakdown() {
   const head = el("tr");
   head.append(...["colDifficulty", "colLength", "colFullyHigh"]
     .map((k, i) => el("th", i ? { class: "num" } : {}, I18N.t(k))));
   const body = el("tbody");
-  body.append(...COLOURS
-    .map((c) => [c, named.filter((p) => p.difficulty === c.key), unnamed.filter((p) => p.difficulty === c.key)])
-    .filter(([, n, u]) => n.length + u.length > 0)
-    .map(([c, n, u]) => breakdownRow([swatch(c), I18N.t(c.key)], n, u)));
+  body.append(...COLOURS.filter((c) => area.figures[c.key])
+    .map((c) => breakdownRow([swatch(c), I18N.t(c.key)], area.figures[c.key])));
   const foot = el("tfoot");
-  foot.append(breakdownRow([I18N.t("colAll")], named, unnamed));
+  foot.append(breakdownRow([I18N.t("colAll")], area.figures.all));
   const thead = el("thead");
   thead.append(head);
   const table = el("table", { class: "breakdown" });
@@ -118,7 +116,7 @@ const hasRose = () => roseSrc(area) !== null;
 
 function renderPair(all) {
   const pair = el("div", { class: "pair" });
-  pair.append(renderBreakdown(all), ...(hasRose() ? [renderRose()] : []));
+  pair.append(renderBreakdown(), ...(hasRose() ? [renderRose()] : []));
   return pair;
 }
 
@@ -175,11 +173,14 @@ function compare(a, b) {
   return (a[sort.key] - b[sort.key]) * sort.dir;
 }
 
-function diffCell(key) {
+const containsText = (hardest) => I18N.t("containsColour", { colour: I18N.t(hardest).toLowerCase() });
+
+function diffCell(key, hardest) {
   const td = el("td");
   const span = el("span", { class: "diff" });
   span.append(swatch(colourOf(key)), I18N.t(key));
   td.append(span);
+  if (hardest) td.append(el("span", { class: "contains" }, containsText(hardest)));
   return td;
 }
 
@@ -187,7 +188,7 @@ function pisteRow(p) {
   const tr = el("tr", isLow(p) ? { id: p.rowId, class: "low" } : { id: p.rowId });
   const name = el("td");
   name.append(link(osmUrl(p.id, p.lat, p.lng, 15), p.label));
-  tr.append(name, diffCell(p.difficulty), ...[p.length_m, p.start_m, p.end_m, p.drop_m]
+  tr.append(name, diffCell(p.difficulty, p.hardest), ...[p.length_m, p.high_m, p.start_m, p.end_m, p.drop_m]
     .map((v) => el("td", { class: "num" }, I18N.m(v))));
   return tr;
 }
@@ -196,7 +197,8 @@ function groupRow(g) {
   const tr = el("tr", { id: `g-${g.difficulty}`, class: "group" });
   const label = `${I18N.t(`unnamed_${g.difficulty}`)} · ${I18N.t("segments", { n: I18N.num(g.segments) })} · ${I18N.km(g.length_m / 1000)}`;
   tr.append(el("td", {}, label), diffCell(g.difficulty), el("td", { class: "num" }, I18N.m(g.length_m)),
-    el("td", { class: "num" }, I18N.m(g.start_m)), el("td", { class: "num" }, I18N.m(g.end_m)), el("td"));
+    el("td", { class: "num" }, I18N.m(g.high_m)), el("td", { class: "num" }, I18N.m(g.start_m)),
+    el("td", { class: "num" }, I18N.m(g.end_m)), el("td"));
   return tr;
 }
 
