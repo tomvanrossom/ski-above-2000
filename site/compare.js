@@ -89,6 +89,44 @@ function roseRow() {
   return tr;
 }
 
+const mapLines = new Map();
+
+function mapRow() {
+  const tr = el("tr");
+  tr.append(el("th", { scope: "row" }, I18N.t("mapTitle")),
+    ...loaded.map((a) => {
+      const td = el("td", { colspan: 2, class: "map-cell start" });
+      td.append(el("div", { class: "cmp-map", "data-slug": a.slug }));
+      return td;
+    }));
+  return tr;
+}
+
+async function drawMiniMap(box) {
+  const slug = box.dataset.slug;
+  if (!mapLines.has(slug)) mapLines.set(slug, loadMapLines(slug));
+  const lines = await mapLines.get(slug);
+  const segments = lines ? [...lines.pistes, ...lines.unnamed].flat() : [];
+  if (!box.isConnected) return;
+  if (!segments.length || typeof L === "undefined") {
+    box.replaceWith("–");
+    return;
+  }
+  const map = L.map(box, { scrollWheelZoom: false, attributionControl: false });
+  L.tileLayer(MAP_TILES, { maxZoom: 17, opacity: 0.55 }).addTo(map);
+  L.control.scale({ imperial: false }).addTo(map);
+  [...segments].sort((a, b) => Number(!isLowSegment(a)) - Number(!isLowSegment(b)))
+    .forEach((s) => L.polyline(s.line, lineStyle(s)).addTo(map));
+  lines.lifts.forEach((l) => L.polyline(l.line, liftStyle(l)).bindPopup(() => liftPopup(l)).addTo(map));
+  map.setView(L.latLngBounds(segments.flatMap((s) => s.line)).getCenter(), START_ZOOM);
+}
+
+function mapCredit() {
+  const credit = el("p", { class: "note" });
+  credit.innerHTML = MAP_ATTRIBUTION;
+  return credit;
+}
+
 function render() {
   const container = document.getElementById("main");
   if (loaded.length === 0) {
@@ -98,7 +136,7 @@ function render() {
   const thead = el("thead");
   thead.append(...headerRows());
   const tbody = el("tbody");
-  tbody.append(...rows().map(bodyRow), roseRow());
+  tbody.append(...rows().map(bodyRow), roseRow(), mapRow());
   const cols = el("colgroup");
   cols.append(el("col", { class: "label-col" }), ...loaded.flatMap(() => [el("col"), el("col")]));
   const table = el("table", { id: "compare", style: `min-width: calc(var(--label-w) + ${loaded.length} * var(--area-w))` });
@@ -106,7 +144,8 @@ function render() {
   const box = el("div", { class: "table-box" });
   box.append(table);
   const notes = missing.length ? [el("p", { class: "note" }, I18N.t("compareMissing", { slugs: missing.join(", ") }))] : [];
-  container.replaceChildren(box, roseCredit(), ...notes);
+  container.replaceChildren(box, mapLegend(), roseCredit(), mapCredit(), ...notes);
+  container.querySelectorAll(".cmp-map").forEach(drawMiniMap);
 }
 
 async function loadArea(slug) {

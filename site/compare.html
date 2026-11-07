@@ -10,6 +10,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#1f5f8b">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="shared.css">
 <style>
   #compare th[scope="row"] { text-transform: none; letter-spacing: 0; font-size: 14px; position: sticky; left: 0; background: var(--surface); }
@@ -22,6 +23,11 @@
   #compare td { text-align: right; }
   #compare td.rose-cell { text-align: center; }
   #compare td.rose-cell img { width: 160px; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+  #compare td.map-cell { padding: 6px; }
+  .cmp-map { height: 320px; border: 1px solid var(--line); border-radius: 6px; z-index: 0; }
+  .map-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 13px; color: var(--muted); }
+  .map-legend i { display: inline-block; width: 22px; height: 0; vertical-align: middle; margin-right: 6px; }
+  .map-popup b { display: block; }
   #compare .colour { display: inline-flex; align-items: center; gap: 6px; }
   #compare td.best { font-weight: 700; color: var(--fg); background: color-mix(in srgb, var(--accent) 16%, var(--surface)); box-shadow: inset 3px 0 0 var(--accent); }
 </style>
@@ -40,6 +46,8 @@
 <script src="common.js"></script>
 <script src="favourites.js"></script>
 <script src="best-value.js?v=4"></script>
-<script src="compare.js?v=9"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="area-map.js"></script>
+<script src="compare.js?v=10"></script>
 </body>
 </html>
