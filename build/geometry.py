@@ -4,6 +4,8 @@ import math
 
 ID_MARKER = '"properties":{"id":"'
 MIN_STEP_DEG = 0.00008
+M_PER_DEG = 111_195
+ASPECTS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
 
 
 def thin(coords):
@@ -56,9 +58,25 @@ def padded_box(lines, pad_deg):
     return [min(lngs) - pad_deg, min(lats) - pad_deg, max(lngs) + pad_deg, max(lats) + pad_deg]
 
 
+def aspect(coords):
+    """Metres of the line per downhill compass direction (ASPECTS order); flat steps and points without height are skipped."""
+    # ponytail: direction of travel downhill, so a traverse counts sideways to the fall line; use a DEM if that matters.
+    metres = [0.0] * len(ASPECTS)
+    for (lng0, lat0, *z0), (lng1, lat1, *z1) in zip(coords, coords[1:]):
+        if not z0 or not z1 or z0[0] == z1[0]:
+            continue
+        dx = (lng1 - lng0) * M_PER_DEG * math.cos(math.radians(lat0))
+        dy = (lat1 - lat0) * M_PER_DEG
+        if z1[0] > z0[0]:
+            dx, dy = -dx, -dy
+        bearing = math.degrees(math.atan2(dx, dy)) % 360
+        metres[round(bearing / (360 / len(ASPECTS))) % len(ASPECTS)] += math.hypot(dx, dy)
+    return metres
+
+
 def read_lines(geojson_gz, wanted):
-    """{run id: thinned [lng, lat] line} for the wanted LineString runs in an OpenSkiData runs.geojson.gz."""
-    lines = {}
+    """({run id: thinned [lng, lat] line}, {run id: aspect metres}) for the wanted LineString runs in a runs.geojson.gz."""
+    lines, aspects = {}, {}
     with gzip.open(geojson_gz, "rt", encoding="utf-8") as source:
         for line in source:
             run_id = feature_id(line)
@@ -67,4 +85,5 @@ def read_lines(geojson_gz, wanted):
             geometry = json.loads(line.strip().rstrip(","))["geometry"]
             if geometry["type"] == "LineString" and len(geometry["coordinates"]) >= 2:
                 lines[run_id] = thin(geometry["coordinates"])
-    return lines
+                aspects[run_id] = aspect(geometry["coordinates"])
+    return lines, aspects

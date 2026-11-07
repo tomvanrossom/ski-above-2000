@@ -14,7 +14,7 @@ from areas import assign_slugs, slugify, sub_area_ids, top_parent  # noqa: E402
 from build import (PRICE_COLUMN, alpine_groups, apply_prices, children, duplicate_tops, lifts_near, municipalities,  # noqa: E402
                    read_prices, summarise, villages)
 from check_output import REQUIRED_AREAS, check_links, check_summary  # noqa: E402
-from geometry import read_lines, thin, to_lift  # noqa: E402
+from geometry import ASPECTS, aspect, read_lines, thin, to_lift  # noqa: E402
 from pistes import figures, group_unnamed, merge_segments, to_run, unnamed_segments, unnamed_share  # noqa: E402
 
 
@@ -87,7 +87,20 @@ class Geometry(unittest.TestCase):
             path = Path(tmp) / "runs.geojson.gz"
             with gzip.open(path, "wt", encoding="utf-8") as f:
                 f.write(body)
-            self.assertEqual(read_lines(path, {"keep", "area"}), {"keep": [[6.0, 45.0], [6.01, 45.01]]})
+            lines, aspects = read_lines(path, {"keep", "area"})
+            self.assertEqual(lines, {"keep": [[6.0, 45.0], [6.01, 45.01]]})
+            self.assertEqual(list(aspects), ["keep"])
+
+    def test_aspect_is_the_downhill_direction_weighted_by_length(self):
+        north_100m = [[6.0, 45.0, 2500], [6.0, 45.0009, 2450]]
+        uphill_drawn_southwest = [[6.0, 45.0, 2000], [6.001, 45.001, 2100]]
+        flat = [[6.0, 45.0, 2000], [6.0, 45.001, 2000]]
+
+        north = aspect(north_100m)
+        self.assertAlmostEqual(north[ASPECTS.index("N")], 100, delta=1)
+        self.assertEqual(sum(north), north[ASPECTS.index("N")])
+        self.assertGreater(aspect(uphill_drawn_southwest)[ASPECTS.index("SW")], 0)
+        self.assertEqual(sum(aspect(flat)), 0)
 
     def test_lift_keeps_operating_ones_with_bottom_and_top_heights(self):
         def lift(status="operating", areas=({"id": "a"},)):

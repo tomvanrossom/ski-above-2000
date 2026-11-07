@@ -23,6 +23,7 @@
   #compare td { text-align: right; }
   #compare td.rose-cell { text-align: center; }
   #compare td.rose-cell img { width: 160px; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+  #compare th[scope="row"]:hover, #compare th[scope="row"]:focus-within { z-index: 3; }
   #compare td.map-cell { padding: 6px; }
   .cmp-map { height: 320px; border: 1px solid var(--line); border-radius: 6px; z-index: 0; }
   .map-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 13px; color: var(--muted); }
@@ -48,6 +49,6 @@
 <script src="best-value.js?v=4"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="area-map.js"></script>
-<script src="compare.js?v=10"></script>
+<script src="compare.js?v=11"></script>
 </body>
 </html>

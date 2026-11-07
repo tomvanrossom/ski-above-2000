@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from alps import contains, load_boundary  # noqa: E402
-from geometry import inside, padded_box, read_lifts, read_lines  # noqa: E402
+from geometry import ASPECTS, inside, padded_box, read_lifts, read_lines  # noqa: E402
 from areas import (MERGED_AREAS, MERGE_OF, PASS_NETWORKS, assign_slugs, name_key, sub_area_ids,  # noqa: E402
                    top_parent)
 from pistes import (figures, group_unnamed, merge_segments, read_piste_rows, to_float, to_run,  # noqa: E402
@@ -255,11 +255,20 @@ def lifts_near(lifts, piste_lines):
     return [lift for lift in lifts if inside(lift["line"][len(lift["line"]) // 2], box)]
 
 
-def write_maps(out, parts_by_slug, geojson_gz, lifts_gz=None):
+def run_ids(groups):
+    return {p["id"] for kind in groups.values() for parts in kind for p in parts}
+
+
+def area_aspect(ids, aspects):
+    """{direction: metres} summed over the area's runs, or None without geometry."""
+    found = [aspects[i] for i in ids if i in aspects]
+    return {d: round(sum(a[k] for a in found)) for k, d in enumerate(ASPECTS)} if found else None
+
+
+def write_maps(out, parts_by_slug, lines, lifts_gz=None):
     """data/maps/<slug>.json: per piste and unnamed segment (same order as the area file), its segments with lines,
     plus the operating lifts around them."""
-    wanted = {p["id"] for groups in parts_by_slug.values() for kind in groups.values() for parts in kind for p in parts}
-    lines = read_lines(geojson_gz, wanted)
+    wanted = set().union(*map(run_ids, parts_by_slug.values()))
     all_lifts = read_lifts(lifts_gz) if lifts_gz else []
     alpine_box = padded_box(lines.values(), LIFT_PAD_DEG) if lines else None
     lifts = [lift for lift in all_lifts if alpine_box and inside(lift["line"][0], alpine_box)]
@@ -295,7 +304,9 @@ def build(runs_csv, areas_csv, boundary_path, out_dir, prices_csv=DEFAULT_PRICES
     with_maps = [{"slug": slugs[("area", i)], **s, **links[i]} for i, (s, _) in enumerate(ordered)]
     with_maps += [{"slug": slugs[("child", j)], **c, "parent": with_maps[i]["slug"]} for j, (c, i) in enumerate(found)]
     parts_by_slug = {a["slug"]: a[MAP_KEY] for a in with_maps}
-    stripped = [{k: v for k, v in a.items() if k != MAP_KEY} for a in with_maps]
+    lines, aspects = read_lines(runs_geojson, set().union(*map(run_ids, parts_by_slug.values()))) if runs_geojson else ({}, {})
+    stripped = [{**{k: v for k, v in a.items() if k != MAP_KEY},
+                 **({"aspect": area_aspect(run_ids(a[MAP_KEY]), aspects)} if aspects else {})} for a in with_maps]
     areas, child_areas = stripped[:len(ordered)], stripped[len(ordered):]
 
     out = Path(out_dir)
@@ -306,7 +317,7 @@ def build(runs_csv, areas_csv, boundary_path, out_dir, prices_csv=DEFAULT_PRICES
     for a in areas + child_areas:
         write_json(out / "areas" / f"{a['slug']}.json", a)
     if runs_geojson:
-        write_maps(out, parts_by_slug, runs_geojson, lifts_geojson)
+        write_maps(out, parts_by_slug, lines, lifts_geojson)
     write_json(out / "areas.json", [{k: a[k] for k in (*SUMMARY_KEYS, *LINK_KEYS) if k in a}
                                     for a in areas + child_areas])
     write_json(out / "meta.json", {"built": datetime.date.today().isoformat(), "areas": len(areas)})

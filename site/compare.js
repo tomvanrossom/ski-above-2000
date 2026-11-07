@@ -16,6 +16,12 @@ const PCT = { format: (n) => I18N.pct(n), digits: 2 };
 const METRES = { format: (n) => I18N.m(n), digits: 0 };
 const highShare = (a) => (fig(a, "all", 0) ? fig(a, "all", 1) / fig(a, "all", 0) : 0);
 
+function aspectShare(a, directions) {
+  const metres = a.aspect && typeof a.aspect === "object" ? a.aspect : {};
+  const total = Object.values(metres).reduce((sum, m) => sum + (Number.isFinite(m) ? m : 0), 0);
+  return total ? directions.reduce((sum, d) => sum + (metres[d] || 0), 0) / total : null;
+}
+
 function rows() {
   const pair = (group) => [(a) => fig(a, group, 0), (a) => fig(a, group, 1)];
   const kmRow = (label, group, swatchOf) => ({ label, swatchOf, ...KM, best: true, cells: pair(group) });
@@ -25,6 +31,8 @@ function rows() {
     ...COLOURS.map((c) => kmRow(I18N.t(c.key), c.key, c)),
     { label: I18N.t("rowTop"), ...METRES, best: true, cells: [(a) => Math.max(...pieces(a).map((p) => p.start_m))] },
     { label: I18N.t("rowBottom"), ...METRES, cells: [(a) => Math.min(...pieces(a).map((p) => p.end_m))] },
+    { label: I18N.t("rowShady"), info: "aspectNote", ...PCT, best: true, cells: [(a) => aspectShare(a, ["N", "NE"])] },
+    { label: I18N.t("rowSunny"), ...PCT, cells: [(a) => aspectShare(a, ["S", "SW"])] },
   ];
 }
 
@@ -63,13 +71,14 @@ function bodyRow(row) {
   } else {
     th.append(row.label);
   }
+  if (row.info) th.append(" ", infoButton("aspectInfo", row.info));
   const colspan = 2 / row.cells.length;
   const columns = row.cells.map((raw) => {
     const values = loaded.map(raw);
     return { values, best: bestOf(row, values) };
   });
   tr.append(th, ...loaded.flatMap((_, i) => columns.map((c, k) =>
-    valueCell(row.format(c.values[i]), c.best.has(i), colspan, k === 0))));
+    valueCell(c.values[i] === null ? "–" : row.format(c.values[i]), c.best.has(i), colspan, k === 0))));
   return tr;
 }
 
